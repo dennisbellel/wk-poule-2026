@@ -10,11 +10,11 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll() { return request.cookies.getAll() },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options as Parameters<typeof supabaseResponse.cookies.set>[2])
           )
         },
       },
@@ -24,36 +24,5 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Public routes
   const publicPaths = ['/auth/login', '/auth/register', '/auth/callback']
-  if (publicPaths.some(p => pathname.startsWith(p))) {
-    if (user && pathname.startsWith('/auth/login')) {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
-    return supabaseResponse
-  }
-
-  // Require auth for all other routes
-  if (!user) {
-    return NextResponse.redirect(new URL('/auth/login', request.url))
-  }
-
-  // Admin routes: check admin flag
-  if (pathname.startsWith('/admin')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile?.is_admin) {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
-  }
-
-  return supabaseResponse
-}
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
-}
+  if (publicPaths.some(p => pathname.startsWith(p)))

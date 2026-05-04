@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 
 const ADMIN_NAV = [
   { href: '/admin', label: '📊 Overzicht' },
@@ -16,24 +15,25 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+
   if (!profile?.is_admin) redirect('/')
 
   return (
     <div className="min-h-screen bg-[#f6f4ef] font-sans">
-      {/* Admin topbar */}
       <div className="bg-[#1a1a1a] px-6 py-4 flex items-center justify-between">
         <div>
           <span className="heading text-lg font-extrabold text-white">Admin</span>
           <span className="text-sm text-[#666] ml-2">Dé WK Poule 2026</span>
         </div>
-        <Link href="/"
-          className="text-sm font-semibold text-[#888] hover:text-white transition-colors">
+        <Link href="/" className="text-sm font-semibold text-[#888] hover:text-white transition-colors">
           → Naar de app
         </Link>
       </div>
-
-      {/* Admin nav */}
       <div className="bg-[#111] border-b border-[#222] px-4 flex overflow-x-auto">
         {ADMIN_NAV.map(item => (
           <Link key={item.href} href={item.href}
@@ -42,7 +42,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </Link>
         ))}
       </div>
-
       <main className="p-6 lg:p-8">{children}</main>
     </div>
   )
