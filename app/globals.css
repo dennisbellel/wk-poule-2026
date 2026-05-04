@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --green: #1a5c38;
+    --green-light: #eaf4ef;
+    --cream: #f6f4ef;
+    --border: #e5e1d8;
+  }
+
+  body {
+    @apply text-gray-900;
+  }
+
+  /* Hide number input arrows */
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type=number] { -moz-appearance: textfield; }
+}
+
+@layer components {
+  .heading { font-family: 'Bricolage Grotesque', sans-serif; }
+  .card {
+    @apply bg-white border border-[#e5e1d8] rounded-2xl overflow-hidden;
+  }
+  .btn-primary {
+    @apply bg-[#1a5c38] text-white font-semibold rounded-xl px-5 py-3 text-sm
+           hover:bg-[#154a2d] transition-colors cursor-pointer border-0 font-sans;
+  }
+  .btn-secondary {
+    @apply bg-white text-[#1a5c38] font-semibold rounded-xl px-5 py-3 text-sm
+           border border-[#1a5c38] hover:bg-[#eaf4ef] transition-colors cursor-pointer font-sans;
+  }
+  .tag {
+    @apply text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap;
+  }
+  .input-score {
+    @apply bg-[#f6f4ef] border border-[#e5e1d8] rounded-lg text-center font-bold
+           focus:outline-none focus:border-[#1a5c38] focus:bg-[#eaf4ef] transition-colors;
+    font-family: 'Bricolage Grotesque', sans-serif;
+  }
+}
