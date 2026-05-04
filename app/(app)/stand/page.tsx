@@ -12,17 +12,11 @@ export default async function StandPage() {
 
   const leaderboard = sortLeaderboard(lbRaw || [])
 
-  // Per-user per-day points (from match predictions with points set)
-  const { data: matchPreds } = await supabase
-    .from('match_predictions')
-    .select('user_id, points, match:match_id(scheduled_at)')
-    .not('points', 'is', null)
-
   return (
     <StandClient
       leaderboard={leaderboard}
       currentUserId={user!.id}
-      matchPredictions={matchPreds || []}
+      matchPredictions={[]}
     />
   )
 }
