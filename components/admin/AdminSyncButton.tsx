@@ -11,8 +11,8 @@ export default function AdminSyncButton() {
     try {
       const res = await fetch('/api/sync', {
         method: 'POST',
-        headers: { authorization: `Bearer ${process.env.NEXT_PUBLIC_SYNC_SECRET || ''}` },
-      })
+        headers: { authorization: `Bearer wkpoule2026geheim` },
+})
       const data = await res.json()
       setResult(data)
     } catch (e) {
