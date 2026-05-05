@@ -134,6 +134,12 @@ export default function WizardModal({ onClose }: { onClose: () => void }) {
               className="mt-3 text-sm text-[#aaa] bg-transparent border-0 cursor-pointer">
               ← Vorige vraag
             </button>
+            <button onClick={()=>{
+  const idx = typeof step === 'number' ? step : 0
+  setStep(idx + 1 >= tourQs.length ? 'done' : idx + 1)
+}} style={{background:"none",border:"none",color:"#aaa",fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginTop:8,padding:0,display:"block"}}>
+  Deze vraag later invullen →
+</button>
           )}
         </div>
       </div>
