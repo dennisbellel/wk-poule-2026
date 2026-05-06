@@ -101,6 +101,8 @@ export interface BonusQuestion {
   active: boolean
   sort_order: number
   created_at: string
+  team_filter: string | null
+  options: string[] | null
 }
 
 export interface BonusAnswer {
