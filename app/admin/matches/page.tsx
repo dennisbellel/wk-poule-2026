@@ -2,6 +2,8 @@
 import { createClient } from '@/lib/supabase/server'
 import AdminMatchesClient from '@/components/admin/AdminMatchesClient'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminMatchesPage() {
   const supabase = await createClient()
 
