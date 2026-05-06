@@ -4,22 +4,21 @@ import { formatDistanceToNow, isPast } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { sortLeaderboard } from '@/lib/points/calculate'
 
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Fetch profile
   const { data: profile } = await supabase
     .from('profiles').select('*').eq('id', user!.id).single()
 
-  // Fetch leaderboard
   const { data: lbRaw } = await supabase
     .from('leaderboard').select('*').order('total_points', { ascending: false })
 
   const leaderboard = sortLeaderboard(lbRaw || [])
   const myEntry = leaderboard.find(e => e.user_id === user!.id)
 
-  // Next upcoming match
   const { data: nextMatch } = await supabase
     .from('matches')
     .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
@@ -29,25 +28,21 @@ export default async function DashboardPage() {
     .limit(1)
     .single()
 
-  // My prediction count
   const { count: predCount } = await supabase
     .from('match_predictions')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user!.id)
 
-  // Total group matches
   const { count: totalGroupMatches } = await supabase
     .from('matches')
     .select('*', { count: 'exact', head: true })
     .eq('phase', 'group')
 
-  // Group predictions count
   const { count: groupPredCount } = await supabase
     .from('group_standing_predictions')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user!.id)
 
-  // Bonus answers count
   const { count: bonusCount } = await supabase
     .from('bonus_answers')
     .select('*', { count: 'exact', head: true })
@@ -58,8 +53,83 @@ export default async function DashboardPage() {
     .select('*', { count: 'exact', head: true })
     .eq('active', true)
 
+  // Aankomende deadlines: wedstrijden zonder voorspelling
+  const now = new Date()
+  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+  const { data: upcomingMatches } = await supabase
+    .from('matches')
+    .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
+    .eq('status', 'scheduled')
+    .gt('prediction_deadline_at', now.toISOString())
+    .lte('prediction_deadline_at', in7Days.toISOString())
+    .order('prediction_deadline_at', { ascending: true })
+    .limit(10)
+
+  const { data: myMatchPreds } = await supabase
+    .from('match_predictions')
+    .select('match_id')
+    .eq('user_id', user!.id)
+
+  const predictedMatchIds = new Set((myMatchPreds || []).map((p: { match_id: string }) => p.match_id))
+
+  // Bonusvragen zonder antwoord met deadline in de toekomst
+  const { data: openBonusQuestions } = await supabase
+    .from('bonus_questions')
+    .select('*')
+    .eq('active', true)
+    .gt('deadline_at', now.toISOString())
+    .order('deadline_at', { ascending: true })
+
+  const { data: myBonusAnswers } = await supabase
+    .from('bonus_answers')
+    .select('question_id')
+    .eq('user_id', user!.id)
+
+  const answeredBonusIds = new Set((myBonusAnswers || []).map((a: { question_id: string }) => a.question_id))
+
+  // Combineer alles tot één gesorteerde lijst
+  type DeadlineItem =
+    | { kind: 'match'; id: string; deadline: Date; label: string; sub: string; done: boolean }
+    | { kind: 'bonus'; id: string; deadline: Date; label: string; sub: string; done: boolean }
+
+  const deadlineItems: DeadlineItem[] = [
+    ...(upcomingMatches || []).map(m => ({
+      kind: 'match' as const,
+      id: m.id,
+      deadline: new Date(m.prediction_deadline_at),
+      label: `${m.home_team?.flag ?? ''} ${m.home_team?.name_nl ?? m.home_team_placeholder ?? '?'} — ${m.away_team?.name_nl ?? m.away_team_placeholder ?? '?'} ${m.away_team?.flag ?? ''}`,
+      sub: `Groep ${m.group_id} · ${m.city ?? ''}`,
+      done: predictedMatchIds.has(m.id),
+    })),
+    ...(openBonusQuestions || []).map(q => ({
+      kind: 'bonus' as const,
+      id: q.id,
+      deadline: new Date(q.deadline_at),
+      label: `${q.icon} ${q.question_nl}`,
+      sub: `Bonusvraag · ${q.points_value} punten`,
+      done: answeredBonusIds.has(q.id),
+    })),
+  ]
+    .sort((a, b) => a.deadline.getTime() - b.deadline.getTime())
+    .slice(0, 8)
+
+  const openCount = deadlineItems.filter(d => !d.done).length
+
   const DEADLINE = new Date('2026-06-11T19:00:00Z')
   const deadlinePast = isPast(DEADLINE)
+
+  function formatDeadline(date: Date) {
+    return date.toLocaleString('nl-NL', {
+      timeZone: 'Europe/Amsterdam',
+      day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit',
+    })
+  }
+
+  function isUrgent(date: Date) {
+    return date.getTime() - now.getTime() < 48 * 60 * 60 * 1000
+  }
 
   return (
     <div>
@@ -126,6 +196,59 @@ export default async function DashboardPage() {
                   <p className="text-sm font-semibold text-amber-800">Deadline nadert!</p>
                   <p className="text-xs text-amber-700">Vul je voorspellingen in vóór 11 juni</p>
                 </div>
+              </div>
+            )}
+
+            {/* Aankomende deadlines */}
+            {deadlineItems.length > 0 && (
+              <div className="card">
+                <div className="px-4 py-3 border-b border-[#f6f4ef] flex justify-between items-center">
+                  <span className="text-sm font-semibold">Aankomende deadlines</span>
+                  {openCount > 0 && (
+                    <span className="tag bg-amber-50 text-amber-700">{openCount} open</span>
+                  )}
+                </div>
+                {deadlineItems.map(item => {
+                  const urgent = isUrgent(item.deadline)
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.kind === 'match' ? '/predict' : '/predict#bonus'}
+                      className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 hover:bg-[#fafaf9] transition-colors"
+                    >
+                      {/* Status bolletje */}
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        item.done ? 'bg-green-400' : urgent ? 'bg-red-400' : 'bg-amber-400'
+                      }`} />
+
+                      {/* Label + sub */}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm truncate ${item.done ? 'text-[#aaa] line-through' : 'text-gray-900'}`}>
+                          {item.label}
+                        </p>
+                        <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>
+                      </div>
+
+                      {/* Deadline */}
+                      <div className="flex-shrink-0 text-right">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          item.done
+                            ? 'bg-[#eaf4ef] text-[#1a5c38]'
+                            : urgent
+                            ? 'bg-red-50 text-red-700'
+                            : 'bg-amber-50 text-amber-700'
+                        }`}>
+                          {item.done ? '✓' : formatDeadline(item.deadline)}
+                        </span>
+                        {!item.done && (
+                          <p className="text-[10px] text-[#ccc] mt-0.5">
+                            {formatDistanceToNow(item.deadline, { locale: nl, addSuffix: true })}
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
             )}
 

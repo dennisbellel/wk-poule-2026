@@ -19,6 +19,33 @@ function ScoreInput({ value, onChange, size = 'md' }: {
   )
 }
 
+function DeadlinePill({ deadline }: { deadline: string }) {
+  const d = new Date(deadline)
+  const now = new Date()
+  const msDiff = d.getTime() - now.getTime()
+  const urgent = msDiff < 48 * 60 * 60 * 1000
+
+  const formatted = d.toLocaleString('nl-NL', {
+    timeZone: 'Europe/Amsterdam',
+    day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit',
+  })
+
+  const hoursLeft = Math.floor(msDiff / (1000 * 60 * 60))
+  const minutesLeft = Math.floor((msDiff % (1000 * 60 * 60)) / (1000 * 60))
+  const timeLeft = hoursLeft > 0 ? `${hoursLeft}u` : `${minutesLeft}m`
+
+  return (
+    <div className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${
+      urgent ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
+    }`}>
+      <span>⏰</span>
+      <span>Sluit {formatted}</span>
+      {urgent && <span className="opacity-60">({timeLeft})</span>}
+    </div>
+  )
+}
+
 export default function MatchPredictionCard({
   match, prediction, onSave, isGroup,
 }: {
@@ -51,7 +78,7 @@ export default function MatchPredictionCard({
   return (
     <div className={`card ${saved ? 'border-[#1a5c38]' : ''} ${isLocked ? 'opacity-50' : ''}`}>
       {/* Header */}
-      <div className={`px-4 py-2.5 border-b border-[#f6f4ef] flex justify-between items-center ${saved ? 'bg-[#eaf4ef]' : 'bg-white'}`}>
+      <div className={`px-4 py-2.5 border-b border-[#f6f4ef] flex justify-between items-center gap-2 flex-wrap ${saved ? 'bg-[#eaf4ef]' : 'bg-white'}`}>
         <div className="flex gap-2 items-center">
           <span className="tag bg-[#f0ede6] text-[#999]">Gr.{match.group_id}</span>
           <span className="text-[11px] text-[#aaa]">
@@ -59,10 +86,19 @@ export default function MatchPredictionCard({
             {new Date(match.scheduled_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
-        {isFinished ? <span className="tag bg-[#eaf4ef] text-[#1a5c38]">Gespeeld</span>
-          : saved ? <span className="tag bg-[#eaf4ef] text-[#1a5c38]">✓ Opgeslagen</span>
-          : isLocked ? <span className="tag bg-[#f0ede6] text-[#999]">🔒 Teams onbekend</span>
-          : <span className="text-[11px] text-amber-500">⚡ Open</span>}
+        <div className="flex items-center gap-2">
+          {/* Deadline pill — alleen als nog niet gespeeld en deadline nog niet verstreken */}
+          {!isFinished && !isPast && !isLocked && (
+            <DeadlinePill deadline={match.prediction_deadline_at} />
+          )}
+          {isFinished
+            ? <span className="tag bg-[#eaf4ef] text-[#1a5c38]">Gespeeld</span>
+            : saved
+            ? <span className="tag bg-[#eaf4ef] text-[#1a5c38]">✓ Opgeslagen</span>
+            : isLocked
+            ? <span className="tag bg-[#f0ede6] text-[#999]">🔒 Teams onbekend</span>
+            : null}
+        </div>
       </div>
 
       <div className="p-4">
@@ -92,7 +128,6 @@ export default function MatchPredictionCard({
         {/* Prediction form */}
         {!isFinished && !isLocked && !isPast && (
           <div className="bg-[#f6f4ef] rounded-xl p-3 space-y-2.5">
-            {/* Eindstand + ruststand */}
             {[
               { label: 'Eindstand', hk: 'home_ft' as const, ak: 'away_ft' as const, size: 'md' as const },
               { label: 'Ruststand', hk: 'home_ht' as const, ak: 'away_ht' as const, size: 'sm' as const },
@@ -109,7 +144,6 @@ export default function MatchPredictionCard({
 
             <div className="h-px bg-[#e5e1d8]" />
 
-            {/* Kaarten */}
             <div className="grid grid-cols-2 gap-2">
               {[
                 { label: '🟨 Gele kaarten', hk: 'home_yellow' as const, ak: 'away_yellow' as const },
@@ -126,7 +160,6 @@ export default function MatchPredictionCard({
               ))}
             </div>
 
-            {/* Knockout extras */}
             {!isGroup && (
               <>
                 <div className="h-px bg-[#e5e1d8]" />
