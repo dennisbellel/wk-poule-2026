@@ -205,14 +205,14 @@ export default function AdminMatchesClient({ initialMatches, teams }: Props) {
 
           {/* Wedstrijden */}
           <div className="divide-y divide-[#f0ede6]">
-            {groupMatches.map(match => (
+            {groupMatches.map((match, idx) => (
               <div key={match.id}>
                 {/* Wedstrijd rij */}
                 {editId !== match.id && (
                   <div className="px-5 py-3.5 flex items-center gap-4 hover:bg-[#fafaf9] transition-colors">
                     {/* Wedstrijdnummer */}
                     <span className="text-xs text-gray-300 font-mono w-6 flex-shrink-0">
-                      #{match.match_number}
+                      {idx + 1}
                     </span>
 
                     {/* Teams */}
