@@ -113,7 +113,7 @@ export default function AdminMatchesClient({ initialMatches, teams }: Props) {
       home_team_id: draft.home_team_id ?? null,
       away_team_id: draft.away_team_id ?? null,
       scheduled_at: fromDatetimeLocal(draft.scheduled_at as string),
-      prediction_deadline_at: fromDatetimeLocal(draft.prediction_deadline_at as string),
+      prediction_deadline_at: fromDatetimeLocal(draft.scheduled_at as string),
       venue: draft.venue ?? null,
       city: draft.city ?? null,
       group_id: draft.group_id ?? null,
