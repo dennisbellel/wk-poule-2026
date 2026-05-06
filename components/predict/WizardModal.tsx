@@ -12,6 +12,7 @@ export default function WizardModal({ onClose }: { onClose: () => void }) {
   const [players, setPlayers] = useState<Player[]>([])
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [userId, setUserId] = useState<string>('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -36,27 +37,41 @@ export default function WizardModal({ onClose }: { onClose: () => void }) {
     load()
   }, [])
 
-  async function saveAnswer(questionId: string, answer: string) {
-    const newAnswers = { ...answers, [questionId]: answer }
-    setAnswers(newAnswers)
-    const existing = Object.keys(answers).includes(questionId)
-    const data = { user_id: userId, question_id: questionId, answer }
-    if (existing) {
-      await supabase.from('bonus_answers').update(data).eq('user_id', userId).eq('question_id', questionId)
-    } else {
+  const tourQs = questions.filter(q => q.phase === 'tournament')
+
+  // Alleen antwoord bijhouden in lokale state, nog niet opslaan
+  function handleChange(questionId: string, val: string) {
+    setAnswers(prev => ({ ...prev, [questionId]: val }))
+  }
+
+  // Opslaan in database + doorgaan naar volgende stap
+  async function handleNext() {
+    if (typeof step !== 'number') return
+    const currentQ = tourQs[step]
+    if (!currentQ) return
+
+    const val = answers[currentQ.id] || ''
+
+    setSaving(true)
+    const alreadyExists = Object.keys(answers).includes(currentQ.id)
+    const data = { user_id: userId, question_id: currentQ.id, answer: val }
+
+    if (alreadyExists) {
+      await supabase.from('bonus_answers').update(data).eq('user_id', userId).eq('question_id', currentQ.id)
+    } else if (val) {
       await supabase.from('bonus_answers').insert(data)
     }
-    goNext()
+    setSaving(false)
+
+    const next = (step as number) + 1
+    setStep(next >= tourQs.length ? 'done' : next)
   }
 
-  function goNext() {
-    if (typeof step === 'number') {
-      const next = step + 1
-      setStep(next >= tourQs.length ? 'done' : next)
+  function goBack() {
+    if (typeof step === 'number' && step > 0) {
+      setStep(step - 1)
     }
   }
-
-  const tourQs = questions.filter(q => q.phase === 'tournament')
 
   if (step === 'intro') return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
@@ -120,15 +135,22 @@ export default function WizardModal({ onClose }: { onClose: () => void }) {
   const currentQ = tourQs[step as number]
   if (!currentQ) return null
 
+  const currentAnswer = answers[currentQ.id] || ''
+  const isLast = (step as number) === tourQs.length - 1
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
       <div className="bg-white rounded-t-3xl w-full max-w-lg h-[88vh] flex flex-col">
         <div className="w-9 h-1 bg-[#e5e1d8] rounded-full mx-auto mt-3 flex-shrink-0" />
+
+        {/* Scrollbaar deel */}
         <div className="flex-1 overflow-y-auto p-6">
           {/* Progress */}
           <div className="flex gap-1 mb-5">
             {tourQs.map((_, i) => (
-              <div key={i} className={`flex-1 h-1 rounded-full transition-colors ${i <= (step as number) ? 'bg-[#1a5c38]' : 'bg-[#e5e1d8]'}`} />
+              <div key={i} className={`flex-1 h-1 rounded-full transition-colors ${
+                i <= (step as number) ? 'bg-[#1a5c38]' : 'bg-[#e5e1d8]'
+              }`} />
             ))}
           </div>
 
@@ -140,26 +162,39 @@ export default function WizardModal({ onClose }: { onClose: () => void }) {
 
           <BonusQuestionItem
             question={currentQ}
-            value={answers[currentQ.id] || ''}
+            value={currentAnswer}
             teams={teams}
             players={players as Player[]}
-            onSave={val => saveAnswer(currentQ.id, val)}
+            onSave={val => handleChange(currentQ.id, val)}
           />
+        </div>
 
-          <div className="mt-3 flex flex-col gap-1">
+        {/* Vaste knoppen onderaan */}
+        <div className="flex-shrink-0 px-6 pb-8 pt-3 border-t border-[#f0ede6] space-y-2 bg-white">
+          <button
+            onClick={handleNext}
+            disabled={saving}
+            className="btn-primary w-full py-3.5 disabled:opacity-40"
+          >
+            {saving
+              ? 'Opslaan...'
+              : !currentAnswer
+              ? 'Overslaan →'
+              : isLast
+              ? 'Afronden ✓'
+              : 'Doorgaan →'}
+          </button>
+
+          <div className="flex gap-4 justify-center">
             {(step as number) > 0 && (
-              <button onClick={() => setStep((step as number) - 1)}
-                className="bg-transparent border-0 text-[#aaa] text-sm cursor-pointer text-left py-1">
-                ← Vorige vraag
+              <button onClick={goBack}
+                className="bg-transparent border-0 text-[#aaa] text-sm cursor-pointer py-1">
+                ← Vorige
               </button>
             )}
-            <button onClick={goNext}
-              className="bg-transparent border-0 text-[#aaa] text-sm cursor-pointer text-left py-1">
-              Deze vraag later invullen →
-            </button>
             <button onClick={onClose}
-              className="bg-transparent border-0 text-[#aaa] text-sm cursor-pointer text-left py-1">
-              Wizard sluiten
+              className="bg-transparent border-0 text-[#aaa] text-sm cursor-pointer py-1">
+              Later invullen
             </button>
           </div>
         </div>
