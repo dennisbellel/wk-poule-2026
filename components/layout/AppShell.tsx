@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import type { Profile } from '@/types'
+import type { Profile, BonusQuestion } from '@/types'
 import WizardModal from '@/components/predict/WizardModal'
+import BonusQuestionItem from '@/components/predict/BonusQuestionItem'
 import { createClient } from '@/lib/supabase/client'
 
 const NAV_ITEMS = [
@@ -16,21 +17,83 @@ const NAV_ITEMS = [
 
 export default function AppShell({ profile, children }: { profile: Profile | null; children: React.ReactNode }) {
   const pathname = usePathname()
-  const [showWizard, setShowWizard] = useState(false)
   const supabase = createClient()
 
+  const [showWizard, setShowWizard] = useState(false)
+  const [liveQuestion, setLiveQuestion] = useState<BonusQuestion | null>(null)
+  const [liveAnswer, setLiveAnswer] = useState('')
+  const [liveSaving, setLiveSaving] = useState(false)
+  const [liveSaved, setLiveSaved] = useState(false)
+
   useEffect(() => {
-    async function checkWizard() {
+    async function checkNotifications() {
       if (!profile) return
-      // Show wizard if user has no bonus answers yet
+
+      // 1. Wizard check: geen bonus_answers nog
       const { count } = await supabase
         .from('bonus_answers')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', profile.id)
-      if (count === 0) setShowWizard(true)
+
+      if (count === 0) {
+        setShowWizard(true)
+        return // Wizard heeft prioriteit, live vragen daarna
+      }
+
+      // 2. Live bonusvraag check: actieve 'live' vragen die nog niet beantwoord zijn
+      const now = new Date().toISOString()
+
+      const { data: liveQuestions } = await supabase
+        .from('bonus_questions')
+        .select('*')
+        .eq('active', true)
+        .eq('phase', 'live')
+        .gt('deadline_at', now) // deadline nog niet verstreken
+        .order('created_at', { ascending: false })
+
+      if (!liveQuestions || liveQuestions.length === 0) return
+
+      // Check welke al beantwoord zijn door deze gebruiker
+      const ids = liveQuestions.map((q: BonusQuestion) => q.id)
+      const { data: answers } = await supabase
+        .from('bonus_answers')
+        .select('question_id')
+        .eq('user_id', profile.id)
+        .in('question_id', ids)
+
+      const answeredIds = new Set((answers ?? []).map((a: { question_id: string }) => a.question_id))
+      const unanswered = liveQuestions.filter((q: BonusQuestion) => !answeredIds.has(q.id))
+
+      if (unanswered.length > 0) {
+        setLiveQuestion(unanswered[0]) // Toon de eerste onbeantwoorde live vraag
+      }
     }
-    checkWizard()
+
+    checkNotifications()
   }, [profile])
+
+  async function handleLiveSave(val: string) {
+    setLiveAnswer(val)
+  }
+
+  async function submitLiveAnswer() {
+    if (!profile || !liveQuestion || !liveAnswer) return
+    setLiveSaving(true)
+
+    await supabase.from('bonus_answers').upsert({
+      user_id: profile.id,
+      question_id: liveQuestion.id,
+      answer: liveAnswer,
+    }, { onConflict: 'user_id,question_id' })
+
+    setLiveSaving(false)
+    setLiveSaved(true)
+    setTimeout(() => {
+      setLiveQuestion(null)
+      setLiveAnswer('')
+      setLiveSaved(false)
+    }, 1500)
+  }
 
   return (
     <div className="flex min-h-screen bg-[#f6f4ef]">
@@ -86,7 +149,65 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
         })}
       </nav>
 
+      {/* Wizard modal */}
       {showWizard && <WizardModal onClose={() => setShowWizard(false)} />}
+
+      {/* Live bonusvraag pop-up */}
+      {liveQuestion && !showWizard && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+
+            {/* Header */}
+            <div className="bg-[#1a5c38] px-6 py-4">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-flex items-center gap-1.5 bg-white/20 text-white text-xs font-bold
+                                 px-2.5 py-1 rounded-full">
+                  🔴 Live vraag
+                </span>
+              </div>
+              <p className="text-white/80 text-xs mt-1">
+                Beantwoord snel — deadline {new Date(liveQuestion.deadline_at).toLocaleString('nl-NL', {
+                  timeZone: 'Europe/Amsterdam',
+                  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                })}
+              </p>
+            </div>
+
+            {/* Vraag */}
+            <div className="px-6 py-5">
+              <BonusQuestionItem
+                question={liveQuestion}
+                value={liveAnswer}
+                teams={[]}
+                players={[]}
+                onSave={handleLiveSave}
+              />
+            </div>
+
+            {/* Knoppen */}
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={submitLiveAnswer}
+                disabled={!liveAnswer || liveSaving}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
+                  liveSaved
+                    ? 'bg-green-500 text-white'
+                    : 'bg-[#1a5c38] text-white hover:bg-[#164d2f]'
+                } disabled:opacity-40`}
+              >
+                {liveSaving ? 'Opslaan...' : liveSaved ? '✓ Opgeslagen!' : 'Antwoord insturen'}
+              </button>
+              <button
+                onClick={() => { setLiveQuestion(null); setLiveAnswer('') }}
+                className="px-4 py-3 rounded-xl text-sm font-semibold bg-[#f6f4ef] text-gray-500
+                           hover:bg-[#ede9e0] transition-colors cursor-pointer"
+              >
+                Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
