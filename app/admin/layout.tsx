@@ -8,6 +8,7 @@ const ADMIN_NAV = [
   { href: '/admin/results', label: '⚽ Uitslagen' },
   { href: '/admin/bonus', label: '🎯 Bonusvragen' },
   { href: '/admin/scoring', label: '⚙️ Puntensysteem' },
+  { href: '/admin/matches', label: '📅 Wedstrijden' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

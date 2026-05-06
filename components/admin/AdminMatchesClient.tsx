@@ -109,14 +109,14 @@ export default function AdminMatchesClient({ initialMatches, teams }: Props) {
     if (!draft || !editId) return
     setSaving(true)
 
-    const updateData = {
-      home_team_id: draft.home_team_id,
-      away_team_id: draft.away_team_id,
+    const updateData: Partial<Match> = {
+      home_team_id: draft.home_team_id ?? null,
+      away_team_id: draft.away_team_id ?? null,
       scheduled_at: fromDatetimeLocal(draft.scheduled_at as string),
       prediction_deadline_at: fromDatetimeLocal(draft.prediction_deadline_at as string),
-      venue: draft.venue,
-      city: draft.city,
-      group_id: draft.group_id,
+      venue: draft.venue ?? null,
+      city: draft.city ?? null,
+      group_id: draft.group_id ?? null,
     }
 
     const { error } = await supabase
