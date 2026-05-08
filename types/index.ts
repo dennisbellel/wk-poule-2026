@@ -1,7 +1,7 @@
 export type Phase = 'group' | 'r32' | 'r16' | 'qf' | 'sf' | 'third' | 'final'
 export type MatchStatus = 'scheduled' | 'live' | 'finished'
 export type QuestionType = 'team' | 'player' | 'number' | 'yes_no' | 'text'
-export type QuestionPhase = 'group' | 'tournament'
+export type QuestionPhase = 'group' | 'tournament' | 'knockout' | 'live'
 
 export interface Profile {
   id: string
