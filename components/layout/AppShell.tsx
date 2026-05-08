@@ -29,7 +29,6 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
     async function checkNotifications() {
       if (!profile) return
 
-      // 1. Wizard check: geen bonus_answers nog
       const { count } = await supabase
         .from('bonus_answers')
         .select('*', { count: 'exact', head: true })
@@ -37,23 +36,20 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
 
       if (count === 0) {
         setShowWizard(true)
-        return // Wizard heeft prioriteit, live vragen daarna
+        return
       }
 
-      // 2. Live bonusvraag check: actieve 'live' vragen die nog niet beantwoord zijn
       const now = new Date().toISOString()
-
       const { data: liveQuestions } = await supabase
         .from('bonus_questions')
         .select('*')
         .eq('active', true)
         .eq('phase', 'live')
-        .gt('deadline_at', now) // deadline nog niet verstreken
+        .gt('deadline_at', now)
         .order('created_at', { ascending: false })
 
       if (!liveQuestions || liveQuestions.length === 0) return
 
-      // Check welke al beantwoord zijn door deze gebruiker
       const ids = liveQuestions.map((q: BonusQuestion) => q.id)
       const { data: answers } = await supabase
         .from('bonus_answers')
@@ -64,17 +60,11 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
       const answeredIds = new Set((answers ?? []).map((a: { question_id: string }) => a.question_id))
       const unanswered = liveQuestions.filter((q: BonusQuestion) => !answeredIds.has(q.id))
 
-      if (unanswered.length > 0) {
-        setLiveQuestion(unanswered[0]) // Toon de eerste onbeantwoorde live vraag
-      }
+      if (unanswered.length > 0) setLiveQuestion(unanswered[0])
     }
 
     checkNotifications()
   }, [profile])
-
-  async function handleLiveSave(val: string) {
-    setLiveAnswer(val)
-  }
 
   async function submitLiveAnswer() {
     if (!profile || !liveQuestion || !liveAnswer) return
@@ -97,7 +87,8 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
 
   return (
     <div className="flex min-h-screen bg-[#f6f4ef]">
-      <aside className="hidden lg:flex w-60 flex-col bg-white border-r border-[#e5e1d8] sticky top-0 h-screen">
+      {/* Sidebar desktop */}
+      <aside className="hidden lg:flex w-60 flex-col bg-white border-r border-[#e5e1d8] sticky top-0 h-screen flex-shrink-0">
         <div className="px-6 py-6 border-b border-[#e5e1d8]">
           <span className="heading block text-lg font-extrabold text-[#1a5c38]">Dé WK Poule</span>
           <span className="text-xs text-[#aaa]">FIFA World Cup 2026</span>
@@ -129,10 +120,14 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
         )}
       </aside>
 
-      <main className="flex-1 min-w-0 pb-20 lg:pb-0">
-        {children}
-      </main>
+      {/* Hoofd content — gecentreerd met max breedte */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        <main className="flex-1 pb-20 lg:pb-0 w-full max-w-5xl mx-auto">
+          {children}
+        </main>
+      </div>
 
+      {/* Mobiele navigatie */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t border-[#e5e1d8] flex z-50 pb-safe">
         {NAV_ITEMS.map(item => {
           const active = pathname === item.href
@@ -156,51 +151,41 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
       {liveQuestion && !showWizard && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-
-            {/* Header */}
             <div className="bg-[#1a5c38] px-6 py-4">
               <div className="flex items-center gap-2 mb-1">
-                <span className="inline-flex items-center gap-1.5 bg-white/20 text-white text-xs font-bold
-                                 px-2.5 py-1 rounded-full">
+                <span className="inline-flex items-center gap-1.5 bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full">
                   🔴 Live vraag
                 </span>
               </div>
               <p className="text-white/80 text-xs mt-1">
                 Beantwoord snel — deadline {new Date(liveQuestion.deadline_at).toLocaleString('nl-NL', {
                   timeZone: 'Europe/Amsterdam',
-                  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
                 })}
               </p>
             </div>
-
-            {/* Vraag */}
             <div className="px-6 py-5">
               <BonusQuestionItem
                 question={liveQuestion}
                 value={liveAnswer}
                 teams={[]}
                 players={[]}
-                onSave={handleLiveSave}
+                onSave={setLiveAnswer}
               />
             </div>
-
-            {/* Knoppen */}
             <div className="px-6 pb-6 flex gap-3">
               <button
                 onClick={submitLiveAnswer}
                 disabled={!liveAnswer || liveSaving}
                 className={`flex-1 py-3 rounded-xl text-sm font-bold transition-colors cursor-pointer ${
-                  liveSaved
-                    ? 'bg-green-500 text-white'
-                    : 'bg-[#1a5c38] text-white hover:bg-[#164d2f]'
+                  liveSaved ? 'bg-green-500 text-white' : 'bg-[#1a5c38] text-white hover:bg-[#164d2f]'
                 } disabled:opacity-40`}
               >
                 {liveSaving ? 'Opslaan...' : liveSaved ? '✓ Opgeslagen!' : 'Antwoord insturen'}
               </button>
               <button
                 onClick={() => { setLiveQuestion(null); setLiveAnswer('') }}
-                className="px-4 py-3 rounded-xl text-sm font-semibold bg-[#f6f4ef] text-gray-500
-                           hover:bg-[#ede9e0] transition-colors cursor-pointer"
+                className="px-4 py-3 rounded-xl text-sm font-semibold bg-[#f6f4ef] text-gray-500 hover:bg-[#ede9e0] transition-colors cursor-pointer"
               >
                 Later
               </button>

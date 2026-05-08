@@ -1,5 +1,4 @@
 'use client'
-import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Profile } from '@/types'
@@ -15,22 +14,10 @@ export default function ProfileClient({
 }) {
   const supabase = createClient()
   const router = useRouter()
-  const [displayName, setDisplayName] = useState(profile?.display_name || '')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/auth/login')
-  }
-
-  async function handleSaveName(e: React.FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    await supabase.from('profiles').update({ display_name: displayName }).eq('id', profile!.id)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
   }
 
   const pct = predCount && lbEntry ? Math.round((lbEntry.match_points / Math.max(predCount * 5, 1)) * 100) : 0
@@ -71,7 +58,11 @@ export default function ProfileClient({
             <div className="px-4 py-3 border-b border-[#f6f4ef]">
               <p className="text-sm font-semibold">Punten breakdown</p>
             </div>
-            {[['⚽ Wedstrijden', lbEntry.match_points], ['📊 Poulestand', lbEntry.group_points], ['🎯 Bonusvragen', lbEntry.bonus_points]].map(([lbl, val]) => (
+            {[
+              ['⚽ Wedstrijden', lbEntry.match_points],
+              ['📊 Poulestand', lbEntry.group_points],
+              ['🎯 Bonusvragen', lbEntry.bonus_points],
+            ].map(([lbl, val]) => (
               <div key={String(lbl)} className="flex justify-between px-4 py-3 border-b border-[#f6f4ef] last:border-0">
                 <span className="text-sm text-gray-600">{lbl}</span>
                 <span className="text-sm font-semibold">{val} pt</span>
@@ -80,28 +71,27 @@ export default function ProfileClient({
           </div>
         )}
 
-        {/* Edit name */}
+        {/* Account info — naam NIET aanpasbaar */}
         <div className="card p-4">
-          <p className="text-sm font-semibold mb-3">Weergavenaam</p>
-          <form onSubmit={handleSaveName} className="flex gap-2">
-            <input
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-              maxLength={30}
-              className="flex-1 border border-[#e5e1d8] rounded-xl px-4 py-2.5 text-sm bg-[#f6f4ef] outline-none focus:border-[#1a5c38]"
-            />
-            <button type="submit" disabled={saving || saved}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold border-0 cursor-pointer transition-colors ${
-                saved ? 'bg-green-100 text-green-700' : 'btn-primary'
-              }`}>
-              {saving ? '...' : saved ? '✓' : 'Opslaan'}
-            </button>
-          </form>
+          <p className="text-sm font-semibold mb-1">Accountgegevens</p>
+          <p className="text-xs text-[#aaa] mb-3">Je weergavenaam is ingesteld bij registratie en kan niet worden gewijzigd.</p>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center py-2 border-b border-[#f6f4ef]">
+              <span className="text-sm text-gray-500">Naam</span>
+              <span className="text-sm font-semibold text-gray-900">{profile?.display_name}</span>
+            </div>
+            <div className="flex justify-between items-center py-2">
+              <span className="text-sm text-gray-500">E-mail</span>
+              <span className="text-sm text-gray-600">{profile?.email}</span>
+            </div>
+          </div>
         </div>
 
         {/* Logout */}
-        <button onClick={handleLogout}
-          className="w-full bg-white border border-red-200 rounded-2xl py-3.5 text-sm font-semibold text-red-500 flex items-center justify-center gap-2 cursor-pointer hover:bg-red-50 transition-colors">
+        <button
+          onClick={handleLogout}
+          className="w-full bg-white border border-red-200 rounded-2xl py-3.5 text-sm font-semibold text-red-500 flex items-center justify-center gap-2 cursor-pointer hover:bg-red-50 transition-colors"
+        >
           🚪 Uitloggen
         </button>
       </div>

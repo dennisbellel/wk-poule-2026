@@ -1,5 +1,5 @@
 'use client'
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import type { Match, MatchPrediction, GroupStandingPrediction, BonusQuestion, BonusAnswer, Team, Player } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import MatchPredictionCard from './MatchPredictionCard'
@@ -28,13 +28,15 @@ export default function PredictClient({
   players: Player[]
 }) {
   const supabase = createClient()
-  const [phase, setPhase] = useState<'group' | 'knockout'>('group')
-  const [tab, setTab] = useState(0) // 0=wedstrijden, 1=poulestand, 2=bonus
+
+  // Drie hoofd-tabs op het bovenste niveau
+  const [mainTab, setMainTab] = useState<'group' | 'bonus' | 'knockout'>('group')
+
+  // Sub-tabs binnen groepsfase
+  const [groupTab, setGroupTab] = useState(0) // 0=wedstrijden, 1=poulestand
   const [koRound, setKoRound] = useState('r32')
   const [activeGroup, setActiveGroup] = useState('A')
-  const [isPending, startTransition] = useTransition()
 
-  // Local state for predictions (optimistic)
   const [localMatchPreds, setLocalMatchPreds] = useState<Record<string, Partial<MatchPrediction>>>(
     Object.fromEntries(matchPredictions.map(p => [p.match_id, p]))
   )
@@ -42,11 +44,9 @@ export default function PredictClient({
     Object.fromEntries(bonusAnswers.map(a => [a.question_id, a.answer]))
   )
 
-  // Save match prediction
   async function saveMatchPrediction(matchId: string, data: Partial<MatchPrediction>) {
     const pred = { user_id: userId, match_id: matchId, ...data }
     setLocalMatchPreds(prev => ({ ...prev, [matchId]: { ...prev[matchId], ...data } }))
-
     const existing = matchPredictions.find(p => p.match_id === matchId)
     if (existing) {
       await supabase.from('match_predictions').update(pred).eq('user_id', userId).eq('match_id', matchId)
@@ -55,7 +55,6 @@ export default function PredictClient({
     }
   }
 
-  // Save bonus answer
   async function saveBonusAnswer(questionId: string, answer: string) {
     setLocalBonusAnswers(prev => ({ ...prev, [questionId]: answer }))
     const existing = bonusAnswers.find(a => a.question_id === questionId)
@@ -78,81 +77,95 @@ export default function PredictClient({
   const openKoCount = koMatches.filter(m => m.status === 'scheduled' && m.home_team_id && m.away_team_id).length
   const savedKoCount = koMatches.filter(m => localMatchPreds[m.id]?.home_ft !== undefined).length
 
+  // Bonusvragen per type — ALLE fases behalve 'group' komen in de bonus tab
   const groupQs = bonusQuestions.filter(q => q.phase === 'group')
-  const tourQs = bonusQuestions.filter(q => q.phase === 'tournament')
+  const overarchingQs = bonusQuestions.filter(q => q.phase !== 'group')
+  const tourQs = overarchingQs.filter(q => q.phase === 'tournament')
+  const liveQs = overarchingQs.filter(q => q.phase === 'live')
+  const knockoutQs = overarchingQs.filter(q => q.phase === 'knockout')
+
+  const MAIN_TABS = [
+    { id: 'group', label: '⚽ Groepsfase' },
+    { id: 'bonus', label: '🎯 Bonusvragen' },
+    { id: 'knockout', label: '🏆 Knockout' },
+  ]
 
   return (
     <div>
-      {/* Phase switcher header */}
+      {/* Header met drie hoofd-tabs */}
       <div className="bg-[#1a5c38] px-4 lg:px-8 pt-4 lg:pt-5">
         <h1 className="heading text-xl font-extrabold text-white mb-4 hidden lg:block">Voorspellingen</h1>
-        <div className="flex gap-2">
-          {[['group', '⚽ Groepsfase', 'vóór 11 juni'], ['knockout', '🏆 Knockout', 'per ronde']].map(([id, lbl, sub]) => (
-            <button key={id} onClick={() => setPhase(id as 'group' | 'knockout')}
-              className={`flex-1 lg:flex-none px-4 pt-3 pb-2 rounded-t-xl border-0 cursor-pointer text-left transition-colors ${
-                phase === id ? 'bg-white' : 'bg-transparent hover:bg-white/10'
-              }`}>
-              <span className={`block text-sm font-bold ${phase === id ? 'text-[#1a5c38]' : 'text-white/80'}`}>{lbl}</span>
-              <span className={`block text-[10px] ${phase === id ? 'text-[#1a5c38]/60' : 'text-white/50'}`}>{sub}</span>
+        <div className="flex gap-1">
+          {MAIN_TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setMainTab(t.id as typeof mainTab)}
+              className={`flex-1 lg:flex-none px-4 pt-3 pb-2.5 rounded-t-xl border-0 cursor-pointer text-left transition-colors ${
+                mainTab === t.id ? 'bg-white' : 'bg-transparent hover:bg-white/10'
+              }`}
+            >
+              <span className={`block text-sm font-bold ${mainTab === t.id ? 'text-[#1a5c38]' : 'text-white/80'}`}>
+                {t.label}
+              </span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── GROUP PHASE ── */}
-      {phase === 'group' && (
+      {/* ── GROEPSFASE ── */}
+      {mainTab === 'group' && (
         <>
           <div className="bg-white border-b border-[#e5e1d8] flex px-4 lg:px-8">
-            {['⚽ Wedstrijden', '📊 Poulestand', '🎯 Bonusvragen'].map((t, i) => (
-              <button key={i} onClick={() => setTab(i)}
+            {['⚽ Wedstrijden', '📊 Poulestand'].map((t, i) => (
+              <button
+                key={i}
+                onClick={() => setGroupTab(i)}
                 className={`px-3 py-3 text-sm border-b-2 -mb-px transition-colors cursor-pointer border-0 bg-transparent ${
-                  tab === i ? 'border-[#1a5c38] text-[#1a5c38] font-semibold' : 'border-transparent text-[#aaa]'
-                }`}>{t}</button>
+                  groupTab === i ? 'border-[#1a5c38] text-[#1a5c38] font-semibold' : 'border-transparent text-[#aaa]'
+                }`}
+              >
+                {t}
+              </button>
             ))}
           </div>
 
           <div className="p-4 lg:p-8">
-            {/* Wedstrijden */}
-            {tab === 0 && (
-              <div className="lg:grid lg:grid-cols-[320px,1fr] lg:gap-6">
-                {/* Match list */}
-                <div className="lg:max-h-screen lg:overflow-y-auto space-y-4">
-                  {Object.entries(groupMatchesByDay).map(([date, matches]) => (
-                    <div key={date}>
-                      <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wider mb-2">
-                        {new Date(date).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })}
-                      </p>
-                      <div className="space-y-2">
-                        {matches.map(m => (
-                          <MatchPredictionCard
-                            key={m.id}
-                            match={m}
-                            prediction={localMatchPreds[m.id]}
-                            onSave={data => saveMatchPrediction(m.id, data)}
-                            isGroup
-                          />
-                        ))}
-                      </div>
+            {groupTab === 0 && (
+              <div className="space-y-4">
+                {Object.entries(groupMatchesByDay).map(([date, matches]) => (
+                  <div key={date}>
+                    <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wider mb-2">
+                      {new Date(date).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    </p>
+                    <div className="space-y-2">
+                      {matches.map(m => (
+                        <MatchPredictionCard
+                          key={m.id}
+                          match={m}
+                          prediction={localMatchPreds[m.id]}
+                          onSave={data => saveMatchPrediction(m.id, data)}
+                          isGroup
+                        />
+                      ))}
                     </div>
-                  ))}
-                </div>
-                {/* Desktop: empty right panel hint */}
-                <div className="hidden lg:flex items-center justify-center text-[#aaa] flex-col gap-3">
-                  <span className="text-4xl">⚽</span>
-                  <p className="text-sm">Klik een wedstrijd aan om te voorspellen</p>
-                </div>
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* Poulestand */}
-            {tab === 1 && (
+            {groupTab === 1 && (
               <div>
                 <div className="flex gap-1.5 flex-wrap mb-4">
                   {GROUPS.map(g => (
-                    <button key={g} onClick={() => setActiveGroup(g)}
+                    <button
+                      key={g}
+                      onClick={() => setActiveGroup(g)}
                       className={`w-9 h-9 rounded-lg text-sm font-semibold border-0 cursor-pointer transition-colors ${
                         activeGroup === g ? 'bg-[#1a5c38] text-white' : 'bg-white border border-[#e5e1d8] text-[#777]'
-                      }`}>{g}</button>
+                      }`}
+                    >
+                      {g}
+                    </button>
                   ))}
                 </div>
                 <GroupStandingForm
@@ -163,42 +176,111 @@ export default function PredictClient({
                 />
               </div>
             )}
-
-            {/* Bonusvragen */}
-            {tab === 2 && (
-              <div className="max-w-xl space-y-4">
-                <div>
-                  <h2 className="text-sm font-semibold text-gray-800 mb-1">Groepsfase</h2>
-                  <p className="text-xs text-[#aaa] mb-3">Sluiten op 11 juni</p>
-                  <div className="space-y-3">
-                    {groupQs.map(q => (
-                      <BonusQuestionItem key={q.id} question={q} value={localBonusAnswers[q.id] || ''}
-                        teams={teams} players={players} onSave={val => saveBonusAnswer(q.id, val)} />
-                    ))}
-                  </div>
-                </div>
-                <div className="h-px bg-[#e5e1d8] my-4" />
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <h2 className="text-sm font-semibold text-gray-800">Heel toernooi</h2>
-                    <span className="tag bg-amber-50 text-amber-700">Aanpasbaar tot 11 jun</span>
-                  </div>
-                  <p className="text-xs text-[#aaa] mb-3">Jouw grote voorspellingen — nog te wijzigen</p>
-                  <div className="space-y-3">
-                    {tourQs.map(q => (
-                      <BonusQuestionItem key={q.id} question={q} value={localBonusAnswers[q.id] || ''}
-                        teams={teams} players={players} onSave={val => saveBonusAnswer(q.id, val)} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </>
       )}
 
-      {/* ── KNOCKOUT PHASE ── */}
-      {phase === 'knockout' && (
+      {/* ── BONUSVRAGEN ── */}
+      {mainTab === 'bonus' && (
+        <div className="p-4 lg:p-8 max-w-xl space-y-6">
+
+          {/* Groepsfase bonusvragen */}
+          {groupQs.length > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold text-gray-800 mb-1">Groepsfase</h2>
+              <p className="text-xs text-[#aaa] mb-3">Sluiten bij start van het toernooi</p>
+              <div className="space-y-3">
+                {groupQs.map(q => (
+                  <BonusQuestionItem
+                    key={q.id} question={q}
+                    value={localBonusAnswers[q.id] || ''}
+                    teams={teams} players={players}
+                    onSave={val => saveBonusAnswer(q.id, val)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Heel toernooi */}
+          {tourQs.length > 0 && (
+            <>
+              {groupQs.length > 0 && <div className="h-px bg-[#e5e1d8]" />}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <h2 className="text-sm font-semibold text-gray-800">Heel toernooi</h2>
+                  <span className="tag bg-amber-50 text-amber-700">Aanpasbaar tot 11 jun</span>
+                </div>
+                <p className="text-xs text-[#aaa] mb-3">Jouw grote voorspellingen</p>
+                <div className="space-y-3">
+                  {tourQs.map(q => (
+                    <BonusQuestionItem
+                      key={q.id} question={q}
+                      value={localBonusAnswers[q.id] || ''}
+                      teams={teams} players={players}
+                      onSave={val => saveBonusAnswer(q.id, val)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Knockoutfase bonusvragen */}
+          {knockoutQs.length > 0 && (
+            <>
+              <div className="h-px bg-[#e5e1d8]" />
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800 mb-1">Knockoutfase</h2>
+                <div className="space-y-3">
+                  {knockoutQs.map(q => (
+                    <BonusQuestionItem
+                      key={q.id} question={q}
+                      value={localBonusAnswers[q.id] || ''}
+                      teams={teams} players={players}
+                      onSave={val => saveBonusAnswer(q.id, val)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Live / actuele vragen */}
+          {liveQs.length > 0 && (
+            <>
+              <div className="h-px bg-[#e5e1d8]" />
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h2 className="text-sm font-semibold text-gray-800">Actueel</h2>
+                  <span className="tag bg-red-50 text-red-600">🔴 Live</span>
+                </div>
+                <p className="text-xs text-[#aaa] mb-3">Tijdelijke vragen — let op de deadline</p>
+                <div className="space-y-3">
+                  {liveQs.map(q => (
+                    <BonusQuestionItem
+                      key={q.id} question={q}
+                      value={localBonusAnswers[q.id] || ''}
+                      teams={teams} players={players}
+                      onSave={val => saveBonusAnswer(q.id, val)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {overarchingQs.length === 0 && groupQs.length === 0 && (
+            <div className="text-center py-12 text-[#aaa]">
+              <p className="text-3xl mb-3">🎯</p>
+              <p className="text-sm">Nog geen bonusvragen beschikbaar.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── KNOCKOUT ── */}
+      {mainTab === 'knockout' && (
         <>
           {openKoCount > 0 && (
             <div className="px-4 lg:px-8 py-2.5 bg-white border-b border-[#e5e1d8]">
@@ -214,10 +296,13 @@ export default function PredictClient({
               const hasSaved = matches.some(m => localMatchPreds[m.id]?.home_ft !== undefined)
               const hasOpen = matches.some(m => m.status === 'scheduled' && m.home_team_id)
               return (
-                <button key={r.id} onClick={() => setKoRound(r.id)}
+                <button
+                  key={r.id}
+                  onClick={() => setKoRound(r.id)}
                   className={`flex-shrink-0 flex flex-col items-center px-4 py-3 text-xs border-b-2 -mb-px cursor-pointer border-0 bg-transparent transition-colors ${
                     koRound === r.id ? 'border-[#1a5c38] text-[#1a5c38] font-semibold' : 'border-transparent text-[#aaa]'
-                  }`}>
+                  }`}
+                >
                   {r.label}
                   {(hasSaved || hasOpen) && (
                     <div className={`w-1.5 h-1.5 rounded-full mt-1 ${hasSaved ? 'bg-green-500' : 'bg-amber-400'}`} />
