@@ -2,6 +2,7 @@
 // components/admin/AdminBonusClient.tsx
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 interface BonusQuestion {
@@ -75,6 +76,7 @@ const EMPTY_QUESTION: Partial<BonusQuestion> = {
 
 export default function AdminBonusClient({ initialQuestions, teams }: Props) {
   const supabase = createClient()
+  const router = useRouter()
   const [questions, setQuestions] = useState<BonusQuestion[]>(initialQuestions)
   const [editId, setEditId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Partial<BonusQuestion> | null>(null)
@@ -176,10 +178,20 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
   async function publishAnswer(q: BonusQuestion) {
     if (!q.correct_answer) return
     setPublishing(q.id)
-    await supabase.from('bonus_questions').update({ correct_answer: q.correct_answer }).eq('id', q.id)
-    setPublished(prev => new Set(prev).add(q.id))
+    // Server route: schrijft correct_answer + berekent punten voor alle ingestuurde antwoorden
+    const res = await fetch('/api/admin/publish-bonus-answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question_id: q.id, correct_answer: q.correct_answer }),
+    })
     setPublishing(null)
+    if (!res.ok) {
+      alert('Publiceren mislukt — probeer opnieuw')
+      return
+    }
+    setPublished(prev => new Set(prev).add(q.id))
     setTimeout(() => setPublished(prev => { const s = new Set(prev); s.delete(q.id); return s }), 2000)
+    router.refresh()
   }
 
   return (

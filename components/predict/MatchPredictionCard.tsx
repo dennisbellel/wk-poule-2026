@@ -74,9 +74,11 @@ export default function MatchPredictionCard({
 }) {
   const [v, setV] = useState<Partial<MatchPrediction>>(prediction || {})
   const [saving, setSaving] = useState(false)
-  // Een voorspelling bestaat als er een prediction-object is (uit de DB) of als ten minste één veld is ingevuld
-  const hasInitialData = prediction != null && Object.values(prediction).some(val => val !== null && val !== undefined && val !== '')
-  const [saved, setSaved] = useState(hasInitialData)
+  // 'saved' = net succesvol opgeslagen (toont "✓ Bijgewerkt"). Reset altijd naar false bij mount —
+  // bij paginawissel zie je weer "Opslaan" zodat het duidelijk is wat de actie doet.
+  const [saved, setSaved] = useState(false)
+  // Een voorspelling bestaat al in de DB als prediction != null
+  const hasExisting = prediction != null && Object.values(prediction).some(val => val !== null && val !== undefined && val !== '')
   const set = (k: keyof MatchPrediction, val: unknown) => setV(p => ({ ...p, [k]: val }))
 
   const isPast = new Date(match.prediction_deadline_at) < new Date()
@@ -98,6 +100,8 @@ export default function MatchPredictionCard({
     try {
       await onSave(v)
       setSaved(true)
+      // Reset terug naar "Opslaan" na 2s — duidelijker bij volgende wijziging
+      setTimeout(() => setSaved(false), 2000)
     } catch {
       // Fout-feedback wordt door de parent (toast) getoond
     } finally {
@@ -109,7 +113,7 @@ export default function MatchPredictionCard({
   const isUrgent = isDeadlineUrgent(match.prediction_deadline_at)
 
   return (
-    <div className={`card overflow-hidden ${saved && !isFinished ? 'border-[#1a5c38]' : ''}`}>
+    <div className={`card overflow-hidden ${(hasExisting || saved) && !isFinished ? 'border-[#1a5c38]' : ''}`}>
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-[#f6f4ef] flex justify-between items-center flex-wrap gap-2 bg-white">
         <div className="flex gap-2 items-center">
@@ -174,32 +178,32 @@ export default function MatchPredictionCard({
       </div>
 
       {/* Voorspelling sectie */}
-      {isFinished && saved && (
+      {isFinished && hasExisting && (
         <div>
           <div className="px-3 pt-2.5 pb-0">
             <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wide">Jouw voorspelling</p>
           </div>
           <PredRow
-            label={breakdown.ft_label === 'exact' ? 'Eindstand (exact)' : breakdown.ft_label === 'outcome' ? 'Eindstand (uitkomst)' : 'Eindstand'}
+            label={breakdown.ft_exact_bonus > 0 ? 'Eindstand (exact!)' : 'Eindstand'}
             homeVal={v.home_ft ?? null} awayVal={v.away_ft ?? null}
-            showResult pts={breakdown.ft}
+            showResult pts={breakdown.ft_home + breakdown.ft_away + breakdown.ft_exact_bonus}
           />
           <PredRow
-            label="Ruststand"
+            label={breakdown.ht_exact_bonus > 0 ? 'Ruststand (exact!)' : 'Ruststand'}
             homeVal={v.home_ht ?? null} awayVal={v.away_ht ?? null}
-            showResult pts={breakdown.ht}
+            showResult pts={breakdown.ht_home + breakdown.ht_away + breakdown.ht_exact_bonus}
           />
           <PredRow
             label="Geel"
             icon={<YellowCard />}
             homeVal={v.home_yellow ?? null} awayVal={v.away_yellow ?? null}
-            showResult pts={breakdown.yellow}
+            showResult pts={breakdown.yellow_home + breakdown.yellow_away}
           />
           <PredRow
             label="Rood"
             icon={<RedCard />}
             homeVal={v.home_red ?? null} awayVal={v.away_red ?? null}
-            showResult pts={breakdown.red}
+            showResult pts={breakdown.red_home + breakdown.red_away}
           />
           {!isGroup && (breakdown.et > 0 || breakdown.pens > 0 || breakdown.winner > 0 || v.et_predicted != null) && (
             <>
@@ -223,14 +227,14 @@ export default function MatchPredictionCard({
       )}
 
       {/* Vergrendeld of gespeeld zonder voorspelling */}
-      {(isLocked || isFinished) && !saved && (
+      {(isLocked || isFinished) && !hasExisting && (
         <div className="px-3 py-4 text-center text-sm text-[#888]">
           Je had geen voorspelling ingevuld voor deze wedstrijd.
         </div>
       )}
 
       {/* Vergrendeld: toon voorspelling readonly */}
-      {isLocked && saved && (
+      {isLocked && hasExisting && (
         <div>
           <div className="px-3 pt-2.5 pb-0">
             <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wide">Jouw voorspelling</p>
@@ -312,7 +316,7 @@ export default function MatchPredictionCard({
           <div className="px-3 py-2.5">
             <button onClick={handleSave} disabled={saving}
               className="btn-primary w-full py-2.5 text-sm disabled:opacity-50">
-              {saving ? 'Opslaan...' : saved ? '✓ Bijgewerkt' : 'Opslaan'}
+              {saving ? 'Opslaan...' : saved ? '✓ Bijgewerkt' : hasExisting ? 'Opslaan' : 'Opslaan'}
             </button>
           </div>
         </div>
