@@ -68,7 +68,7 @@ export default async function DashboardPage() {
   let totalInputs = 0
 
   for (const pred of myPredictions || []) {
-    const m = pred.match as Record<string, unknown> | null
+    const m = pred.match as { home_ft: number | null; away_ft: number | null; home_ht: number | null; away_ht: number | null; home_yellow: number | null; away_yellow: number | null; home_red: number | null; away_red: number | null; status: string } | null
     if (!m || m.status !== 'finished') continue
     const fields: Array<[unknown, unknown]> = [
       [pred.home_ft, m.home_ft], [pred.away_ft, m.away_ft],
