@@ -16,9 +16,30 @@ const config: Config = {
           100: '#eaf4ef',
           600: '#1a5c38',
           700: '#154a2d',
+          800: '#164d2f',
+          border: '#c8e6d4',
         },
-        cream: '#f6f4ef',
-        border: '#e5e1d8',
+        cream: {
+          DEFAULT: '#f6f4ef',
+          dark: '#ede9e0',
+          tint: '#f0ede6',
+          divider: '#edeae3',
+        },
+        border: {
+          DEFAULT: '#e5e1d8',
+          mid: '#c8c4bc',
+        },
+        ink: {
+          DEFAULT: '#1a1a1a',
+          mute: '#777',
+          subtle: '#888',
+          soft: '#999',
+          dim: '#aaa',
+          ghost: '#ccc',
+        },
+        surface: {
+          hover: '#fafaf9',
+        },
       },
       fontFamily: {
         sans: ['DM Sans', 'system-ui', 'sans-serif'],

@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
-import type { Match, MatchPrediction } from '@/types'
+import type { Match, MatchPrediction, ScoringKeys } from '@/types'
+import { calculateMatchPointsBreakdown } from '@/lib/points/calculate'
+import { formatDateTimeNL, formatDateShortNL, formatTimeNL, isDeadlineUrgent } from '@/lib/format'
 
 function YellowCard() {
   return <span style={{ display: 'inline-block', width: 10, height: 13, background: '#F5A623', borderRadius: 2, flexShrink: 0 }} />
@@ -23,18 +25,15 @@ function ScoreInput({ value, onChange }: {
   )
 }
 
-function PredRow({ label, icon, homeVal, awayVal, homeActual, awayActual, pts, showResult }: {
+function PredRow({ label, icon, homeVal, awayVal, pts, showResult, single }: {
   label: string
   icon?: React.ReactNode
   homeVal: React.ReactNode
-  awayVal: React.ReactNode
-  homeActual?: number | null
-  awayActual?: number | null
+  awayVal?: React.ReactNode
   pts?: number
   showResult?: boolean
+  single?: boolean
 }) {
-  const homeCorrect = homeActual !== undefined && homeActual !== null && typeof homeVal === 'number' ? homeVal === homeActual : null
-  const awayCorrect = awayActual !== undefined && awayActual !== null && typeof awayVal === 'number' ? awayVal === awayActual : null
   const totalPts = pts !== undefined ? pts : 0
 
   return (
@@ -42,10 +41,16 @@ function PredRow({ label, icon, homeVal, awayVal, homeActual, awayActual, pts, s
       <span className="flex items-center gap-1.5 text-xs text-[#888] w-28 flex-shrink-0">
         {icon}{label}
       </span>
-      <div className="flex items-center gap-1 flex-1 justify-center">
-        {homeVal}
-        <span className="text-xs text-[#ccc] px-0.5">–</span>
-        {awayVal}
+      <div className="flex items-center gap-1 flex-1 justify-center text-sm">
+        {single ? (
+          homeVal
+        ) : (
+          <>
+            {homeVal}
+            <span className="text-xs text-[#ccc] px-0.5">–</span>
+            {awayVal}
+          </>
+        )}
       </div>
       {showResult && pts !== undefined && (
         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
@@ -59,16 +64,19 @@ function PredRow({ label, icon, homeVal, awayVal, homeActual, awayActual, pts, s
 }
 
 export default function MatchPredictionCard({
-  match, prediction, onSave, isGroup,
+  match, prediction, onSave, isGroup, scoring,
 }: {
   match: Match
   prediction: Partial<MatchPrediction> | undefined
   onSave: (data: Partial<MatchPrediction>) => Promise<void>
   isGroup: boolean
+  scoring: ScoringKeys
 }) {
   const [v, setV] = useState<Partial<MatchPrediction>>(prediction || {})
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(prediction?.home_ft !== null && prediction?.home_ft !== undefined)
+  // Een voorspelling bestaat als er een prediction-object is (uit de DB) of als ten minste één veld is ingevuld
+  const hasInitialData = prediction != null && Object.values(prediction).some(val => val !== null && val !== undefined && val !== '')
+  const [saved, setSaved] = useState(hasInitialData)
   const set = (k: keyof MatchPrediction, val: unknown) => setV(p => ({ ...p, [k]: val }))
 
   const isPast = new Date(match.prediction_deadline_at) < new Date()
@@ -82,28 +90,23 @@ export default function MatchPredictionCard({
   const homeFlag = match.home_team?.flag ?? '🏳️'
   const awayFlag = match.away_team?.flag ?? '🏳️'
 
-  // Bereken punten per onderdeel voor weergave
-  function calcRowPts(predH: number | null | undefined, predA: number | null | undefined, actH: number | null | undefined, actA: number | null | undefined, ptsPerTeam: number): number {
-    let pts = 0
-    if (predH !== null && predH !== undefined && actH !== null && actH !== undefined && predH === actH) pts += ptsPerTeam
-    if (predA !== null && predA !== undefined && actA !== null && actA !== undefined && predA === actA) pts += ptsPerTeam
-    return pts
-  }
+  // Breakdown gebruikt scoring config — komt overeen met server-berekening
+  const breakdown = calculateMatchPointsBreakdown(match, v, scoring)
 
   async function handleSave() {
     setSaving(true)
-    await onSave(v)
-    setSaved(true)
-    setSaving(false)
+    try {
+      await onSave(v)
+      setSaved(true)
+    } catch {
+      // Fout-feedback wordt door de parent (toast) getoond
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const deadlineFormatted = new Date(match.prediction_deadline_at).toLocaleString('nl-NL', {
-    timeZone: 'Europe/Amsterdam',
-    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-  })
-
-  const msDiff = new Date(match.prediction_deadline_at).getTime() - Date.now()
-  const isUrgent = msDiff < 48 * 60 * 60 * 1000 && msDiff > 0
+  const deadlineFormatted = formatDateTimeNL(match.prediction_deadline_at)
+  const isUrgent = isDeadlineUrgent(match.prediction_deadline_at)
 
   return (
     <div className={`card overflow-hidden ${saved && !isFinished ? 'border-[#1a5c38]' : ''}`}>
@@ -112,8 +115,7 @@ export default function MatchPredictionCard({
         <div className="flex gap-2 items-center">
           <span className="tag bg-[#f0ede6] text-[#999]">Gr.{match.group_id}</span>
           <span className="text-[11px] text-[#aaa]">
-            {new Date(match.scheduled_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} ·{' '}
-            {new Date(match.scheduled_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+            {formatDateShortNL(match.scheduled_at)} · {formatTimeNL(match.scheduled_at)}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -178,37 +180,52 @@ export default function MatchPredictionCard({
             <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wide">Jouw voorspelling</p>
           </div>
           <PredRow
-            label="Eindstand"
+            label={breakdown.ft_label === 'exact' ? 'Eindstand (exact)' : breakdown.ft_label === 'outcome' ? 'Eindstand (uitkomst)' : 'Eindstand'}
             homeVal={v.home_ft ?? null} awayVal={v.away_ft ?? null}
-            showResult pts={calcRowPts(v.home_ft, v.away_ft, match.home_ft, match.away_ft, 3)}
+            showResult pts={breakdown.ft}
           />
           <PredRow
             label="Ruststand"
             homeVal={v.home_ht ?? null} awayVal={v.away_ht ?? null}
-            showResult pts={calcRowPts(v.home_ht, v.away_ht, match.home_ht, match.away_ht, 1)}
+            showResult pts={breakdown.ht}
           />
           <PredRow
             label="Geel"
             icon={<YellowCard />}
             homeVal={v.home_yellow ?? null} awayVal={v.away_yellow ?? null}
-            showResult pts={calcRowPts(v.home_yellow, v.away_yellow, match.home_yellow, match.away_yellow, 1)}
+            showResult pts={breakdown.yellow}
           />
           <PredRow
             label="Rood"
             icon={<RedCard />}
             homeVal={v.home_red ?? null} awayVal={v.away_red ?? null}
-            showResult pts={calcRowPts(v.home_red, v.away_red, match.home_red, match.away_red, 1)}
+            showResult pts={breakdown.red}
           />
+          {!isGroup && (breakdown.et > 0 || breakdown.pens > 0 || breakdown.winner > 0 || v.et_predicted != null) && (
+            <>
+              {v.et_predicted != null && (
+                <PredRow label="Verlenging" homeVal={v.et_predicted ? 'Ja' : 'Nee'} single showResult pts={breakdown.et} />
+              )}
+              {v.pens_predicted != null && (
+                <PredRow label="Strafschoppen" homeVal={v.pens_predicted ? 'Ja' : 'Nee'} single showResult pts={breakdown.pens} />
+              )}
+              {v.winner_team_id && (
+                <PredRow label="Winnaar" homeVal={v.winner_team_id === match.home_team_id ? homeLabel : awayLabel} single showResult pts={breakdown.winner} />
+              )}
+            </>
+          )}
           {/* Totaal */}
           <div className="flex justify-between items-center px-3 py-2.5 bg-[#f6f4ef]">
             <span className="text-xs text-[#888]">Totaal deze wedstrijd</span>
-            <span className="text-base font-bold text-[#1a5c38]">{
-              calcRowPts(v.home_ft, v.away_ft, match.home_ft, match.away_ft, 3) +
-              calcRowPts(v.home_ht, v.away_ht, match.home_ht, match.away_ht, 1) +
-              calcRowPts(v.home_yellow, v.away_yellow, match.home_yellow, match.away_yellow, 1) +
-              calcRowPts(v.home_red, v.away_red, match.home_red, match.away_red, 1)
-            } pt</span>
+            <span className="text-base font-bold text-[#1a5c38]">{breakdown.total} pt</span>
           </div>
+        </div>
+      )}
+
+      {/* Vergrendeld of gespeeld zonder voorspelling */}
+      {(isLocked || isFinished) && !saved && (
+        <div className="px-3 py-4 text-center text-sm text-[#888]">
+          Je had geen voorspelling ingevuld voor deze wedstrijd.
         </div>
       )}
 

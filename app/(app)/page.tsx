@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { sortLeaderboard } from '@/lib/points/calculate'
+import { formatDateTimeNL, formatDateShortNL, formatTimeNL, isDeadlineUrgent } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
@@ -161,17 +162,8 @@ export default async function DashboardPage() {
     .filter(item => !item.done)
     .slice(0, 8)
 
-  function formatDeadline(date: Date) {
-    return date.toLocaleString('nl-NL', {
-      timeZone: 'Europe/Amsterdam',
-      day: 'numeric', month: 'short',
-      hour: '2-digit', minute: '2-digit',
-    })
-  }
-
-  function isUrgent(date: Date) {
-    return date.getTime() - now.getTime() < 48 * 60 * 60 * 1000
-  }
+  const formatDeadline = formatDateTimeNL
+  const isUrgent = (date: Date) => isDeadlineUrgent(date, now)
 
   return (
     <div>
@@ -285,8 +277,7 @@ export default async function DashboardPage() {
                   <div className="flex justify-between items-center mb-3">
                     <span className="tag bg-[#eaf4ef] text-[#1a5c38]">Groep {nextMatch.group_id}</span>
                     <span className="text-xs text-[#aaa]">
-                      {new Date(nextMatch.scheduled_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} ·{' '}
-                      {new Date(nextMatch.scheduled_at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                      {formatDateShortNL(nextMatch.scheduled_at)} · {formatTimeNL(nextMatch.scheduled_at)}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 mb-4">

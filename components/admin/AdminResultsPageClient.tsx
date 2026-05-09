@@ -2,31 +2,7 @@
 import { useState } from 'react'
 import AdminMatchesClient from './AdminMatchesClient'
 import AdminResultForm from './AdminResultForm'
-
-interface Match {
-  id: string
-  scheduled_at: string
-  status: string
-  group_id: string | null
-  phase: string
-  match_number: number
-  home_ft: number | null
-  away_ft: number | null
-  home_ht: number | null
-  away_ht: number | null
-  home_yellow: number | null
-  away_yellow: number | null
-  home_red: number | null
-  away_red: number | null
-  penalties: boolean
-  home_team_id: string | null
-  away_team_id: string | null
-  venue: string | null
-  city: string | null
-  prediction_deadline_at: string
-  home_team: { id: string; name: string; name_nl?: string; flag: string } | null
-  away_team: { id: string; name: string; name_nl?: string; flag: string } | null
-}
+import type { Match } from '@/types'
 
 export default function AdminResultsPageClient({ matches }: { matches: Match[] }) {
   const [tab, setTab] = useState<'matches' | 'results'>('results')
@@ -104,7 +80,7 @@ export default function AdminResultsPageClient({ matches }: { matches: Match[] }
             id: m.id,
             match_number: m.match_number,
             group_id: m.group_id,
-            phase: 'group',
+            phase: m.phase,
             scheduled_at: m.scheduled_at,
             prediction_deadline_at: m.prediction_deadline_at,
             venue: m.venue,

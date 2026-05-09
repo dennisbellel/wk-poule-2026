@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import PredictClient from '@/components/predict/PredictClient'
+import { DEFAULT_SCORING, type ScoringKeys } from '@/types'
 
 export default async function PredictPage() {
   const supabase = await createClient()
@@ -57,6 +58,13 @@ export default async function PredictPage() {
     .select('*, team:team_id(*)')
     .order('name', { ascending: true })
 
+  // Scoring config — bepaalt punten per onderdeel in de kaart
+  const { data: scoringRows } = await supabase.from('scoring_config').select('key, value')
+  const scoring = { ...DEFAULT_SCORING } as ScoringKeys
+  for (const row of scoringRows || []) {
+    if (row.key in scoring) (scoring as unknown as Record<string, number>)[row.key] = row.value
+  }
+
   return (
     <PredictClient
       userId={user!.id}
@@ -68,6 +76,7 @@ export default async function PredictPage() {
       bonusQuestions={bonusQuestions || []}
       bonusAnswers={bonusAnswers || []}
       players={players || []}
+      scoring={scoring}
     />
   )
 }
