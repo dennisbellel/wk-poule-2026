@@ -86,7 +86,8 @@ export default async function DashboardPage() {
   }
 
   for (const ans of myBonusAnswersFull || []) {
-    const q = ans.question as { correct_answer: string | null } | null
+    const questionData = Array.isArray(ans.question) ? ans.question[0] : ans.question
+    const q = questionData as { correct_answer: string | null } | null
     if (!q?.correct_answer) continue
     totalInputs++
     if (ans.answer?.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()) correctInputs++
