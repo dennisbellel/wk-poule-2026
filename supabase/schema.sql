@@ -275,21 +275,34 @@ CREATE TRIGGER bonus_answers_updated_at BEFORE UPDATE ON bonus_answers
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ─── LEADERBOARD VIEW ────────────────────────────────────────────────────────
+-- Sommeer eerst per tabel per gebruiker, JOIN daarna — anders veroorzaken
+-- de drie LEFT JOINs een Cartesisch product en wordt elke punt vermenigvuldigd
+-- met het aantal records in de andere tabellen.
 CREATE OR REPLACE VIEW leaderboard AS
 SELECT
   p.id AS user_id,
   p.display_name,
   p.avatar_color,
-  COALESCE(SUM(mp.points), 0) AS match_points,
-  COALESCE(SUM(gsp.points), 0) AS group_points,
-  COALESCE(SUM(ba.points), 0) AS bonus_points,
-  COALESCE(SUM(mp.points), 0) + COALESCE(SUM(gsp.points), 0) + COALESCE(SUM(ba.points), 0) AS total_points,
-  MIN(mp.submitted_at) AS submitted_at
+  COALESCE(mp_sum.total, 0) AS match_points,
+  COALESCE(gsp_sum.total, 0) AS group_points,
+  COALESCE(ba_sum.total, 0) AS bonus_points,
+  COALESCE(mp_sum.total, 0)
+    + COALESCE(gsp_sum.total, 0)
+    + COALESCE(ba_sum.total, 0) AS total_points,
+  mp_sum.first_submitted AS submitted_at
 FROM profiles p
-LEFT JOIN match_predictions mp ON mp.user_id = p.id
-LEFT JOIN group_standing_predictions gsp ON gsp.user_id = p.id
-LEFT JOIN bonus_answers ba ON ba.user_id = p.id
-GROUP BY p.id, p.display_name, p.avatar_color;
+LEFT JOIN (
+  SELECT user_id, SUM(points) AS total, MIN(submitted_at) AS first_submitted
+  FROM match_predictions GROUP BY user_id
+) mp_sum ON mp_sum.user_id = p.id
+LEFT JOIN (
+  SELECT user_id, SUM(points) AS total
+  FROM group_standing_predictions GROUP BY user_id
+) gsp_sum ON gsp_sum.user_id = p.id
+LEFT JOIN (
+  SELECT user_id, SUM(points) AS total
+  FROM bonus_answers GROUP BY user_id
+) ba_sum ON ba_sum.user_id = p.id;
 
 -- ─── SEED: SCORING CONFIG ────────────────────────────────────────────────────
 INSERT INTO scoring_config (key, value, label_nl, category) VALUES
