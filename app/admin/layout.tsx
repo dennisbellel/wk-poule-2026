@@ -5,10 +5,9 @@ import Link from 'next/link'
 const ADMIN_NAV = [
   { href: '/admin', label: '📊 Overzicht' },
   { href: '/admin/members', label: '👥 Deelnemers' },
-  { href: '/admin/results', label: '⚽ Uitslagen' },
+  { href: '/admin/results', label: '⚽ Wedstrijden & Uitslagen' },
   { href: '/admin/bonus', label: '🎯 Bonusvragen' },
   { href: '/admin/scoring', label: '⚙️ Puntensysteem' },
-  { href: '/admin/matches', label: '📅 Wedstrijden' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

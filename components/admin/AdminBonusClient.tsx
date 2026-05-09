@@ -81,6 +81,8 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [publishing, setPublishing] = useState<string | null>(null)
+  const [published, setPublished] = useState<Set<string>>(new Set())
 
   // Gesorteerd op sort_order
   const sorted = useMemo(() => [...questions].sort((a, b) => a.sort_order - b.sort_order), [questions])
@@ -167,8 +169,17 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
   }
 
   async function setCorrectAnswer(q: BonusQuestion, answer: string) {
-    await supabase.from('bonus_questions').update({ correct_answer: answer }).eq('id', q.id)
+    // Sla lokaal op — nog niet naar database
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, correct_answer: answer } : x))
+  }
+
+  async function publishAnswer(q: BonusQuestion) {
+    if (!q.correct_answer) return
+    setPublishing(q.id)
+    await supabase.from('bonus_questions').update({ correct_answer: q.correct_answer }).eq('id', q.id)
+    setPublished(prev => new Set(prev).add(q.id))
+    setPublishing(null)
+    setTimeout(() => setPublished(prev => { const s = new Set(prev); s.delete(q.id); return s }), 2000)
   }
 
   return (
@@ -223,11 +234,11 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
                     </span>
                   </div>
 
-                  {/* Juist antwoord invullen */}
-                  <div className="mt-3">
+                  {/* Juist antwoord invullen + publiceren */}
+                  <div className="mt-3 space-y-2">
                     {q.question_type === 'yes_no' ? (
-                      <div className="flex gap-2">
-                        <span className="text-xs text-gray-400 self-center mr-1">Juist antwoord:</span>
+                      <div className="flex gap-2 flex-wrap items-center">
+                        <span className="text-xs text-gray-400 self-center">Juist antwoord:</span>
                         {['Ja', 'Nee'].map(opt => (
                           <button
                             key={opt}
@@ -241,13 +252,10 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
                             {opt}
                           </button>
                         ))}
-                        {q.correct_answer && (
-                          <span className="text-xs text-green-600 self-center">✓ ingesteld</span>
-                        )}
                       </div>
                     ) : (
                       <div className="flex gap-2 items-center">
-                        <span className="text-xs text-gray-400">Juist antwoord:</span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">Juist antwoord:</span>
                         <input
                           type={q.question_type === 'number' ? 'number' : 'text'}
                           value={q.correct_answer ?? ''}
@@ -263,6 +271,20 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
                         />
                       </div>
                     )}
+                    {/* Publiceer knop */}
+                    <button
+                      onClick={() => publishAnswer(q)}
+                      disabled={!q.correct_answer || publishing === q.id}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border-0 transition-colors cursor-pointer disabled:opacity-40 ${
+                        published.has(q.id)
+                          ? 'bg-green-500 text-white'
+                          : q.correct_answer
+                          ? 'bg-[#1a5c38] text-white hover:bg-[#164d2f]'
+                          : 'bg-[#f0ede6] text-[#aaa] cursor-not-allowed'
+                      }`}
+                    >
+                      {publishing === q.id ? 'Publiceren...' : published.has(q.id) ? '✓ Gepubliceerd' : '▶ Publiceer antwoord'}
+                    </button>
                   </div>
                 </div>
 
