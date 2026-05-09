@@ -1,10 +1,11 @@
 'use client'
 import { useState } from 'react'
-import type { Match, MatchPrediction, GroupStandingPrediction, BonusQuestion, BonusAnswer, Team, Player } from '@/types'
+import type { Match, MatchPrediction, GroupStandingPrediction, BonusQuestion, BonusAnswer, Team, Player, ScoringKeys } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import MatchPredictionCard from './MatchPredictionCard'
 import GroupStandingForm from './GroupStandingForm'
 import BonusQuestionItem from './BonusQuestionItem'
+import { formatDateLongNL } from '@/lib/format'
 
 const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const KO_ROUNDS = [
@@ -15,7 +16,7 @@ const KO_ROUNDS = [
 
 export default function PredictClient({
   userId, groupMatches, koMatches, matchPredictions, groupPredictions,
-  teams, bonusQuestions, bonusAnswers, players,
+  teams, bonusQuestions, bonusAnswers, players, scoring,
 }: {
   userId: string
   groupMatches: Match[]
@@ -26,6 +27,7 @@ export default function PredictClient({
   bonusQuestions: BonusQuestion[]
   bonusAnswers: BonusAnswer[]
   players: Player[]
+  scoring: ScoringKeys
 }) {
   const supabase = createClient()
 
@@ -44,25 +46,38 @@ export default function PredictClient({
     Object.fromEntries(bonusAnswers.map(a => [a.question_id, a.answer]))
   )
 
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   async function saveMatchPrediction(matchId: string, data: Partial<MatchPrediction>) {
-    const pred = { user_id: userId, match_id: matchId, ...data }
+    const previous = localMatchPreds[matchId]
     setLocalMatchPreds(prev => ({ ...prev, [matchId]: { ...prev[matchId], ...data } }))
-    const existing = matchPredictions.find(p => p.match_id === matchId)
-    if (existing) {
-      await supabase.from('match_predictions').update(pred).eq('user_id', userId).eq('match_id', matchId)
-    } else {
-      await supabase.from('match_predictions').insert(pred)
+
+    const { error } = await supabase
+      .from('match_predictions')
+      .upsert({ user_id: userId, match_id: matchId, ...data }, { onConflict: 'user_id,match_id' })
+
+    if (error) {
+      // Rollback bij fout
+      setLocalMatchPreds(prev => ({ ...prev, [matchId]: previous }))
+      setSaveError('Voorspelling niet opgeslagen — probeer opnieuw')
+      setTimeout(() => setSaveError(null), 4000)
+      throw error
     }
   }
 
   async function saveBonusAnswer(questionId: string, answer: string) {
+    const previous = localBonusAnswers[questionId]
     setLocalBonusAnswers(prev => ({ ...prev, [questionId]: answer }))
-    const existing = bonusAnswers.find(a => a.question_id === questionId)
-    const data = { user_id: userId, question_id: questionId, answer }
-    if (existing) {
-      await supabase.from('bonus_answers').update(data).eq('user_id', userId).eq('question_id', questionId)
-    } else {
-      await supabase.from('bonus_answers').insert(data)
+
+    const { error } = await supabase
+      .from('bonus_answers')
+      .upsert({ user_id: userId, question_id: questionId, answer }, { onConflict: 'user_id,question_id' })
+
+    if (error) {
+      setLocalBonusAnswers(prev => ({ ...prev, [questionId]: previous }))
+      setSaveError('Antwoord niet opgeslagen — probeer opnieuw')
+      setTimeout(() => setSaveError(null), 4000)
+      throw error
     }
   }
 
@@ -92,6 +107,15 @@ export default function PredictClient({
 
   return (
     <div>
+      {/* Error toast — onder mobile header / boven content */}
+      {saveError && (
+        <div className="fixed top-4 inset-x-4 lg:left-auto lg:right-8 lg:w-96 z-50 bg-red-50 border border-red-200 rounded-xl px-4 py-3 shadow-lg flex items-start gap-2">
+          <span className="text-red-600">⚠</span>
+          <p className="text-sm text-red-700 flex-1">{saveError}</p>
+          <button onClick={() => setSaveError(null)} className="text-red-400 hover:text-red-600 text-sm">×</button>
+        </div>
+      )}
+
       {/* Header met drie hoofd-tabs */}
       <div className="bg-[#1a5c38] px-4 lg:px-8 pt-4 lg:pt-5">
         <h1 className="heading text-xl font-extrabold text-white mb-4 hidden lg:block">Voorspellingen</h1>
@@ -135,7 +159,7 @@ export default function PredictClient({
                 {Object.entries(groupMatchesByDay).map(([date, matches]) => (
                   <div key={date}>
                     <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wider mb-2">
-                      {new Date(date).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      {formatDateLongNL(date)}
                     </p>
                     <div className="space-y-2">
                       {matches.map(m => (
@@ -145,6 +169,7 @@ export default function PredictClient({
                           prediction={localMatchPreds[m.id]}
                           onSave={data => saveMatchPrediction(m.id, data)}
                           isGroup
+                          scoring={scoring}
                         />
                       ))}
                     </div>
@@ -326,6 +351,7 @@ export default function PredictClient({
                   prediction={localMatchPreds[m.id]}
                   onSave={data => saveMatchPrediction(m.id, data)}
                   isGroup={false}
+                  scoring={scoring}
                 />
               ))
             )}

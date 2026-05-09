@@ -68,18 +68,21 @@ export async function POST(request: Request) {
         .select('*')
         .eq('match_id', dbMatch.id)
 
-      if (predictions) {
-        for (const pred of predictions) {
-          const updatedMatch = {
-            ...dbMatch, home_ft: homeFT, away_ft: awayFT,
-            home_ht: fm.score.halftime.home, away_ht: fm.score.halftime.away,
-            status: 'finished' as const, penalties,
-            home_yellow: homeYellow, away_yellow: awayYellow,
-            home_red: homeRed, away_red: awayRed,
-          }
-          const points = calculateMatchPoints(updatedMatch as never, pred as never, scoring)
-          await supabase.from('match_predictions').update({ points }).eq('id', pred.id)
+      if (predictions && predictions.length > 0) {
+        const updatedMatch = {
+          ...dbMatch, home_ft: homeFT, away_ft: awayFT,
+          home_ht: fm.score.halftime.home, away_ht: fm.score.halftime.away,
+          status: 'finished' as const, penalties,
+          home_yellow: homeYellow, away_yellow: awayYellow,
+          home_red: homeRed, away_red: awayRed,
+          winner_team_id: winner,
         }
+        await Promise.all(
+          predictions.map(pred => {
+            const points = calculateMatchPoints(updatedMatch as never, pred as never, scoring)
+            return supabase.from('match_predictions').update({ points }).eq('id', pred.id)
+          })
+        )
       }
 
       await supabase.rpc('generate_match_activity', { p_match_id: dbMatch.id })
@@ -96,6 +99,6 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
-  return POST(request)
+export async function GET() {
+  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 })
 }

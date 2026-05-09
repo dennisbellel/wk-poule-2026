@@ -6,6 +6,7 @@ import type { Profile, BonusQuestion } from '@/types'
 import WizardModal from '@/components/predict/WizardModal'
 import BonusQuestionItem from '@/components/predict/BonusQuestionItem'
 import { createClient } from '@/lib/supabase/client'
+import { formatDateTimeNL } from '@/lib/format'
 
 const NAV_ITEMS = [
   { href: '/', icon: '⚡', label: 'Home', mobileLabel: 'Home' },
@@ -158,10 +159,7 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
                 </span>
               </div>
               <p className="text-white/80 text-xs mt-1">
-                Beantwoord snel — deadline {new Date(liveQuestion.deadline_at).toLocaleString('nl-NL', {
-                  timeZone: 'Europe/Amsterdam',
-                  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-                })}
+                Beantwoord snel — deadline {formatDateTimeNL(liveQuestion.deadline_at)}
               </p>
             </div>
             <div className="px-6 py-5">

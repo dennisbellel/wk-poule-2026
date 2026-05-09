@@ -51,6 +51,7 @@ export default function AdminResultForm({ match }: { match: MatchWithTeams }) {
   const [publishing, setPublishing] = useState(false)
   const [saved, setSaved] = useState(false)
   const [published, setPublished] = useState(false)
+  const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
 
   const s = (k: keyof typeof v, val: number | null) => setV(p => ({ ...p, [k]: val }))
 
@@ -63,38 +64,56 @@ export default function AdminResultForm({ match }: { match: MatchWithTeams }) {
   // Sla op als concept in pending_results (niet direct in matches)
   async function handleSave() {
     setSaving(true)
-    await supabase.from('pending_results').upsert({
+    const { error } = await supabase.from('pending_results').upsert({
       match_id: match.id,
       ...v,
       penalties: false,
       status: 'pending',
       synced_at: new Date().toISOString(),
     }, { onConflict: 'match_id' })
-    setSaved(true)
+
     setSaving(false)
+    if (error) {
+      setFeedback({ kind: 'error', message: 'Concept opslaan mislukt — probeer opnieuw' })
+      setTimeout(() => setFeedback(null), 5000)
+      return
+    }
+    setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
-  // Publiceer: schrijf naar matches én zet status op finished
+  // Publiceer: roept server route aan die uitslag schrijft én alle voorspellingen herberekent
   async function handlePublish() {
     if (!isComplete) return
     setPublishing(true)
+    setFeedback(null)
 
-    await supabase.from('matches').update({
-      ...v,
-      status: 'finished',
-      updated_at: new Date().toISOString(),
-    }).eq('id', match.id)
+    try {
+      const res = await fetch('/api/admin/publish-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ match_id: match.id, ...v }),
+      })
+      const json = await res.json()
 
-    await supabase.from('pending_results').upsert({
-      match_id: match.id,
-      ...v,
-      status: 'published',
-      published_at: new Date().toISOString(),
-    }, { onConflict: 'match_id' })
+      if (!res.ok) {
+        setFeedback({ kind: 'error', message: json.error || 'Publiceren mislukt' })
+        setTimeout(() => setFeedback(null), 5000)
+        return
+      }
 
-    setPublished(true)
-    setPublishing(false)
+      setPublished(true)
+      setFeedback({
+        kind: 'success',
+        message: `Uitslag gepubliceerd · ${json.recalculated} voorspellingen herberekend`,
+      })
+      setTimeout(() => setFeedback(null), 5000)
+    } catch {
+      setFeedback({ kind: 'error', message: 'Netwerkfout — probeer opnieuw' })
+      setTimeout(() => setFeedback(null), 5000)
+    } finally {
+      setPublishing(false)
+    }
   }
 
   const isFinished = match.status === 'finished'
@@ -151,6 +170,17 @@ export default function AdminResultForm({ match }: { match: MatchWithTeams }) {
           </div>
         ))}
       </div>
+
+      {/* Feedback banner */}
+      {feedback && (
+        <div className={`px-4 py-2.5 text-xs font-semibold border-b ${
+          feedback.kind === 'success'
+            ? 'bg-[#eaf4ef] text-[#1a5c38] border-[#c8e6d4]'
+            : 'bg-red-50 text-red-700 border-red-200'
+        }`}>
+          {feedback.kind === 'success' ? '✓ ' : '⚠ '}{feedback.message}
+        </div>
+      )}
 
       {/* Knoppen */}
       <div className="px-4 py-3 flex gap-2">

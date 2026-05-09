@@ -58,6 +58,69 @@ export function calculateMatchPoints(
   return points
 }
 
+// ─── BREAKDOWN PER ONDERDEEL ──────────────────────────────────────────────────
+// Voor weergave in MatchPredictionCard: per rij hoeveel punten behaald.
+export interface MatchPointsBreakdown {
+  ft: number          // eindstand (exact OF outcome)
+  ft_label: 'exact' | 'outcome' | 'wrong'
+  ht: number          // ruststand
+  yellow: number      // gele kaarten (home + away)
+  red: number         // rode kaarten (home + away)
+  et: number          // verlenging (knockout)
+  pens: number        // strafschoppen (knockout)
+  winner: number      // winnaar (knockout)
+  total: number
+}
+
+export function calculateMatchPointsBreakdown(
+  match: Match,
+  prediction: Partial<MatchPrediction>,
+  scoring: ScoringKeys
+): MatchPointsBreakdown {
+  const b: MatchPointsBreakdown = {
+    ft: 0, ft_label: 'wrong', ht: 0, yellow: 0, red: 0,
+    et: 0, pens: 0, winner: 0, total: 0,
+  }
+
+  if (match.status !== 'finished') return b
+  if (match.home_ft === null || match.away_ft === null) return b
+
+  if (prediction.home_ft != null && prediction.away_ft != null) {
+    if (prediction.home_ft === match.home_ft && prediction.away_ft === match.away_ft) {
+      b.ft = scoring.exact_ft
+      b.ft_label = 'exact'
+    } else {
+      const actual = match.home_ft > match.away_ft ? 'h' : match.away_ft > match.home_ft ? 'a' : 'd'
+      const pred = prediction.home_ft > prediction.away_ft ? 'h' : prediction.away_ft > prediction.home_ft ? 'a' : 'd'
+      if (actual === pred) {
+        b.ft = scoring.correct_outcome
+        b.ft_label = 'outcome'
+      }
+    }
+  }
+
+  if (match.home_ht !== null && match.away_ht !== null &&
+      prediction.home_ht != null && prediction.away_ht != null &&
+      prediction.home_ht === match.home_ht && prediction.away_ht === match.away_ht) {
+    b.ht = scoring.exact_ht
+  }
+
+  if (match.home_yellow !== null && prediction.home_yellow != null && prediction.home_yellow === match.home_yellow) b.yellow += scoring.exact_yellow
+  if (match.away_yellow !== null && prediction.away_yellow != null && prediction.away_yellow === match.away_yellow) b.yellow += scoring.exact_yellow
+  if (match.home_red !== null && prediction.home_red != null && prediction.home_red === match.home_red) b.red += scoring.exact_red
+  if (match.away_red !== null && prediction.away_red != null && prediction.away_red === match.away_red) b.red += scoring.exact_red
+
+  if (match.phase !== 'group') {
+    const actualEt = match.home_et !== null
+    if (prediction.et_predicted != null && prediction.et_predicted === actualEt) b.et = scoring.knockout_et
+    if (prediction.pens_predicted != null && prediction.pens_predicted === match.penalties) b.pens = scoring.knockout_pens
+    if (prediction.winner_team_id && match.winner_team_id && prediction.winner_team_id === match.winner_team_id) b.winner = scoring.knockout_winner
+  }
+
+  b.total = b.ft + b.ht + b.yellow + b.red + b.et + b.pens + b.winner
+  return b
+}
+
 // ─── GRANULAIRE SCORE BREAKDOWN ───────────────────────────────────────────────
 // Telt het totaal aantal correcte individuele inputs.
 // Wordt gebruikt als tiebreaker in de tussenstand én voor "goede antwoorden" stat.
