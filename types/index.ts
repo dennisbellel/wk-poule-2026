@@ -145,29 +145,35 @@ export interface LeaderboardEntry {
 }
 
 export interface ScoringKeys {
-  exact_ft: number
-  correct_outcome: number
-  exact_ht: number
-  exact_yellow: number
-  exact_red: number
+  // Per-input wedstrijdscores
+  match_ft_team: number          // per goede team-eindstand (home of away apart)
+  match_ft_exact_bonus: number   // bonus als BEIDE ft scores exact kloppen
+  match_ht_team: number          // per goede team-ruststand
+  match_ht_exact_bonus: number   // bonus als BEIDE ht scores exact kloppen
+  match_yellow_team: number      // per goede team gele kaarten
+  match_red_team: number         // per goede team rode kaarten
+  // Knockout extra
   knockout_et: number
   knockout_pens: number
   knockout_winner: number
+  // Poulestand
   group_position: number
   group_points: number
   group_gf: number
   group_ga: number
   group_yellow: number
   group_red: number
+  // Bonus
   bonus_default: number
 }
 
 export const DEFAULT_SCORING: ScoringKeys = {
-  exact_ft: 5,
-  correct_outcome: 2,
-  exact_ht: 3,
-  exact_yellow: 2,
-  exact_red: 3,
+  match_ft_team: 2,
+  match_ft_exact_bonus: 3,
+  match_ht_team: 1,
+  match_ht_exact_bonus: 1,
+  match_yellow_team: 1,
+  match_red_team: 2,
   knockout_et: 2,
   knockout_pens: 2,
   knockout_winner: 3,
@@ -181,11 +187,12 @@ export const DEFAULT_SCORING: ScoringKeys = {
 }
 
 export const SCORING_LABELS: Record<keyof ScoringKeys, { label: string; category: string }> = {
-  exact_ft: { label: 'Eindstand exact goed', category: 'Wedstrijd' },
-  correct_outcome: { label: 'Winnaar/gelijkspel correct', category: 'Wedstrijd' },
-  exact_ht: { label: 'Ruststand exact goed', category: 'Wedstrijd' },
-  exact_yellow: { label: 'Gele kaarten exact goed', category: 'Wedstrijd' },
-  exact_red: { label: 'Rode kaarten exact goed', category: 'Wedstrijd' },
+  match_ft_team: { label: 'Eindstand per team correct', category: 'Wedstrijd' },
+  match_ft_exact_bonus: { label: 'Bonus: eindstand volledig exact', category: 'Wedstrijd' },
+  match_ht_team: { label: 'Ruststand per team correct', category: 'Wedstrijd' },
+  match_ht_exact_bonus: { label: 'Bonus: ruststand volledig exact', category: 'Wedstrijd' },
+  match_yellow_team: { label: 'Gele kaarten per team correct', category: 'Wedstrijd' },
+  match_red_team: { label: 'Rode kaarten per team correct', category: 'Wedstrijd' },
   knockout_et: { label: 'Verlenging (ja/nee) correct', category: 'Knockout extra' },
   knockout_pens: { label: 'Strafschoppen (ja/nee) correct', category: 'Knockout extra' },
   knockout_winner: { label: 'Winnaar correct', category: 'Knockout extra' },

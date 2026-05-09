@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 interface MatchWithTeams {
@@ -41,6 +42,7 @@ function ScoreInput({ value, onChange }: { value: number | null; onChange: (v: n
 
 export default function AdminResultForm({ match }: { match: MatchWithTeams }) {
   const supabase = createClient()
+  const router = useRouter()
   const [v, setV] = useState({
     home_ft: match.home_ft, away_ft: match.away_ft,
     home_ht: match.home_ht, away_ht: match.away_ht,
@@ -108,6 +110,8 @@ export default function AdminResultForm({ match }: { match: MatchWithTeams }) {
         message: `Uitslag gepubliceerd · ${json.recalculated} voorspellingen herberekend`,
       })
       setTimeout(() => setFeedback(null), 5000)
+      // Ververs server data zodat na navigatie de inputs gevuld blijven
+      router.refresh()
     } catch {
       setFeedback({ kind: 'error', message: 'Netwerkfout — probeer opnieuw' })
       setTimeout(() => setFeedback(null), 5000)

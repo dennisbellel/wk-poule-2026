@@ -1,75 +1,43 @@
 import type { Match, MatchPrediction, GroupStandingPrediction, ScoringKeys } from '@/types'
 
 // ─── MATCH POINTS ─────────────────────────────────────────────────────────────
+// Per-input scoring: elke goede team-input krijgt zijn punten apart.
+// Bonus voor exact eindstand of exact ruststand komt er bovenop.
 export function calculateMatchPoints(
   match: Match,
   prediction: MatchPrediction,
   scoring: ScoringKeys
 ): number {
-  if (match.status !== 'finished') return 0
-  if (match.home_ft === null || match.away_ft === null) return 0
-  if (prediction.home_ft === null || prediction.away_ft === null) return 0
-
-  let points = 0
-  const actualHome = match.home_ft
-  const actualAway = match.away_ft
-  const predHome = prediction.home_ft
-  const predAway = prediction.away_ft
-
-  if (predHome === actualHome && predAway === actualAway) {
-    points += scoring.exact_ft
-  } else {
-    const actualOutcome = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw'
-    const predOutcome = predHome > predAway ? 'home' : predAway > predHome ? 'away' : 'draw'
-    if (actualOutcome === predOutcome) points += scoring.correct_outcome
-  }
-
-  if (match.home_ht !== null && match.away_ht !== null &&
-      prediction.home_ht !== null && prediction.away_ht !== null) {
-    if (prediction.home_ht === match.home_ht && prediction.away_ht === match.away_ht)
-      points += scoring.exact_ht
-  }
-
-  if (match.home_yellow !== null && match.away_yellow !== null &&
-      prediction.home_yellow !== null && prediction.away_yellow !== null) {
-    if (prediction.home_yellow === match.home_yellow) points += scoring.exact_yellow
-    if (prediction.away_yellow === match.away_yellow) points += scoring.exact_yellow
-  }
-
-  if (match.home_red !== null && match.away_red !== null &&
-      prediction.home_red !== null && prediction.away_red !== null) {
-    if (prediction.home_red === match.home_red) points += scoring.exact_red
-    if (prediction.away_red === match.away_red) points += scoring.exact_red
-  }
-
-  if (match.phase !== 'group') {
-    if (prediction.et_predicted !== null && match.home_et !== null) {
-      const actualEt = match.home_et !== null
-      if (prediction.et_predicted === actualEt) points += scoring.knockout_et
-    }
-    if (prediction.pens_predicted !== null) {
-      if (prediction.pens_predicted === match.penalties) points += scoring.knockout_pens
-    }
-    if (prediction.winner_team_id && match.winner_team_id) {
-      if (prediction.winner_team_id === match.winner_team_id) points += scoring.knockout_winner
-    }
-  }
-
-  return points
+  return calculateMatchPointsBreakdown(match, prediction, scoring).total
 }
 
 // ─── BREAKDOWN PER ONDERDEEL ──────────────────────────────────────────────────
-// Voor weergave in MatchPredictionCard: per rij hoeveel punten behaald.
+// Per-input scoring met bonus voor volledig exacte voorspelling.
 export interface MatchPointsBreakdown {
-  ft: number          // eindstand (exact OF outcome)
-  ft_label: 'exact' | 'outcome' | 'wrong'
-  ht: number          // ruststand
-  yellow: number      // gele kaarten (home + away)
-  red: number         // rode kaarten (home + away)
-  et: number          // verlenging (knockout)
-  pens: number        // strafschoppen (knockout)
-  winner: number      // winnaar (knockout)
+  ft_home: number           // home_ft correct → match_ft_team
+  ft_away: number           // away_ft correct → match_ft_team
+  ft_exact_bonus: number    // beide ft kloppen → match_ft_exact_bonus
+  ht_home: number
+  ht_away: number
+  ht_exact_bonus: number
+  yellow_home: number
+  yellow_away: number
+  red_home: number
+  red_away: number
+  et: number
+  pens: number
+  winner: number
   total: number
+}
+
+function emptyBreakdown(): MatchPointsBreakdown {
+  return {
+    ft_home: 0, ft_away: 0, ft_exact_bonus: 0,
+    ht_home: 0, ht_away: 0, ht_exact_bonus: 0,
+    yellow_home: 0, yellow_away: 0,
+    red_home: 0, red_away: 0,
+    et: 0, pens: 0, winner: 0, total: 0,
+  }
 }
 
 export function calculateMatchPointsBreakdown(
@@ -77,39 +45,53 @@ export function calculateMatchPointsBreakdown(
   prediction: Partial<MatchPrediction>,
   scoring: ScoringKeys
 ): MatchPointsBreakdown {
-  const b: MatchPointsBreakdown = {
-    ft: 0, ft_label: 'wrong', ht: 0, yellow: 0, red: 0,
-    et: 0, pens: 0, winner: 0, total: 0,
-  }
-
+  const b = emptyBreakdown()
   if (match.status !== 'finished') return b
-  if (match.home_ft === null || match.away_ft === null) return b
 
-  if (prediction.home_ft != null && prediction.away_ft != null) {
-    if (prediction.home_ft === match.home_ft && prediction.away_ft === match.away_ft) {
-      b.ft = scoring.exact_ft
-      b.ft_label = 'exact'
-    } else {
-      const actual = match.home_ft > match.away_ft ? 'h' : match.away_ft > match.home_ft ? 'a' : 'd'
-      const pred = prediction.home_ft > prediction.away_ft ? 'h' : prediction.away_ft > prediction.home_ft ? 'a' : 'd'
-      if (actual === pred) {
-        b.ft = scoring.correct_outcome
-        b.ft_label = 'outcome'
-      }
-    }
+  // Eindstand per kant
+  if (match.home_ft !== null && prediction.home_ft != null && prediction.home_ft === match.home_ft) {
+    b.ft_home = scoring.match_ft_team
+  }
+  if (match.away_ft !== null && prediction.away_ft != null && prediction.away_ft === match.away_ft) {
+    b.ft_away = scoring.match_ft_team
+  }
+  // Bonus: beide ft volledig exact
+  if (match.home_ft !== null && match.away_ft !== null &&
+      prediction.home_ft != null && prediction.away_ft != null &&
+      prediction.home_ft === match.home_ft && prediction.away_ft === match.away_ft) {
+    b.ft_exact_bonus = scoring.match_ft_exact_bonus
   }
 
+  // Ruststand per kant
+  if (match.home_ht !== null && prediction.home_ht != null && prediction.home_ht === match.home_ht) {
+    b.ht_home = scoring.match_ht_team
+  }
+  if (match.away_ht !== null && prediction.away_ht != null && prediction.away_ht === match.away_ht) {
+    b.ht_away = scoring.match_ht_team
+  }
   if (match.home_ht !== null && match.away_ht !== null &&
       prediction.home_ht != null && prediction.away_ht != null &&
       prediction.home_ht === match.home_ht && prediction.away_ht === match.away_ht) {
-    b.ht = scoring.exact_ht
+    b.ht_exact_bonus = scoring.match_ht_exact_bonus
   }
 
-  if (match.home_yellow !== null && prediction.home_yellow != null && prediction.home_yellow === match.home_yellow) b.yellow += scoring.exact_yellow
-  if (match.away_yellow !== null && prediction.away_yellow != null && prediction.away_yellow === match.away_yellow) b.yellow += scoring.exact_yellow
-  if (match.home_red !== null && prediction.home_red != null && prediction.home_red === match.home_red) b.red += scoring.exact_red
-  if (match.away_red !== null && prediction.away_red != null && prediction.away_red === match.away_red) b.red += scoring.exact_red
+  // Gele kaarten per kant
+  if (match.home_yellow !== null && prediction.home_yellow != null && prediction.home_yellow === match.home_yellow) {
+    b.yellow_home = scoring.match_yellow_team
+  }
+  if (match.away_yellow !== null && prediction.away_yellow != null && prediction.away_yellow === match.away_yellow) {
+    b.yellow_away = scoring.match_yellow_team
+  }
 
+  // Rode kaarten per kant
+  if (match.home_red !== null && prediction.home_red != null && prediction.home_red === match.home_red) {
+    b.red_home = scoring.match_red_team
+  }
+  if (match.away_red !== null && prediction.away_red != null && prediction.away_red === match.away_red) {
+    b.red_away = scoring.match_red_team
+  }
+
+  // Knockout extras
   if (match.phase !== 'group') {
     const actualEt = match.home_et !== null
     if (prediction.et_predicted != null && prediction.et_predicted === actualEt) b.et = scoring.knockout_et
@@ -117,7 +99,11 @@ export function calculateMatchPointsBreakdown(
     if (prediction.winner_team_id && match.winner_team_id && prediction.winner_team_id === match.winner_team_id) b.winner = scoring.knockout_winner
   }
 
-  b.total = b.ft + b.ht + b.yellow + b.red + b.et + b.pens + b.winner
+  b.total = b.ft_home + b.ft_away + b.ft_exact_bonus
+          + b.ht_home + b.ht_away + b.ht_exact_bonus
+          + b.yellow_home + b.yellow_away
+          + b.red_home + b.red_away
+          + b.et + b.pens + b.winner
   return b
 }
 

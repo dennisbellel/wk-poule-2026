@@ -1,13 +1,17 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { ScoringConfig } from '@/types'
 
 export default function AdminScoringClient({ initialScoring }: { initialScoring: ScoringConfig[] }) {
   const supabase = createClient()
+  const router = useRouter()
   const [scoring, setScoring] = useState(initialScoring)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [recalculating, setRecalculating] = useState(false)
+  const [recalcResult, setRecalcResult] = useState<string | null>(null)
 
   const categories = [...new Set(scoring.map(s => s.category))]
 
@@ -25,6 +29,29 @@ export default function AdminScoringClient({ initialScoring }: { initialScoring:
     setTimeout(() => setSaved(false), 2000)
   }
 
+  async function handleRecalculate() {
+    if (!confirm('Alle bestaande punten worden opnieuw berekend volgens de huidige scoring. Doorgaan?')) return
+    setRecalculating(true)
+    setRecalcResult(null)
+    try {
+      const res = await fetch('/api/admin/recalculate-all', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) {
+        setRecalcResult(`Fout: ${json.error || 'onbekend'}`)
+      } else {
+        setRecalcResult(
+          `✓ Klaar — ${json.match_predictions_updated} wedstrijdvoorspellingen, ${json.bonus_answers_updated} bonusantwoorden, ${json.group_predictions_updated} poule-voorspellingen herberekend.`
+        )
+        router.refresh()
+      }
+    } catch {
+      setRecalcResult('Netwerkfout — probeer opnieuw')
+    } finally {
+      setRecalculating(false)
+      setTimeout(() => setRecalcResult(null), 8000)
+    }
+  }
+
   const maxPts = scoring.filter(s => ['Wedstrijd', 'Knockout extra'].includes(s.category)).reduce((a, r) => a + r.value, 0)
 
   return (
@@ -38,8 +65,27 @@ export default function AdminScoringClient({ initialScoring }: { initialScoring:
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
-        ℹ️ Wijzigingen gelden voor nieuwe berekeningen. Bestaande punten worden herberekend bij de eerstvolgende sync.
+        ℹ️ Wijzigingen gelden voor nieuwe berekeningen. Klik hieronder op &ldquo;Alle punten herberekenen&rdquo; om bestaande punten ook bij te werken.
       </div>
+
+      <div className="bg-white border border-[#e5e1d8] rounded-2xl px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-gray-800">Alle punten herberekenen</p>
+          <p className="text-xs text-[#888] mt-0.5">Past de scoring toe op alle bestaande voorspellingen en antwoorden. Veilig om vaker te draaien.</p>
+        </div>
+        <button
+          onClick={handleRecalculate}
+          disabled={recalculating}
+          className="py-2 px-4 text-sm font-semibold rounded-xl bg-[#1a5c38] text-white border-0 hover:bg-[#154a2d] disabled:opacity-50 cursor-pointer"
+        >
+          {recalculating ? 'Bezig...' : '↻ Herbereken'}
+        </button>
+      </div>
+      {recalcResult && (
+        <div className={`rounded-xl px-4 py-3 text-xs ${recalcResult.startsWith('✓') ? 'bg-[#eaf4ef] text-[#1a5c38] border border-[#c8e6d4]' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {recalcResult}
+        </div>
+      )}
 
       <div className="bg-[#eaf4ef] rounded-xl px-4 py-3 text-sm font-semibold text-[#1a5c38]">
         Max per wedstrijd (incl. knockout): {maxPts} punten
