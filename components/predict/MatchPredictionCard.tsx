@@ -228,8 +228,8 @@ export default function MatchPredictionCard({
 
       {/* Open: invulformulier */}
       {isOpen && (
-        <div className="bg-[#f6f4ef]">
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#edeae3]">
+        <div className="bg-white">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
             <span className="text-xs text-[#888] w-28 flex-shrink-0">Eindstand</span>
             <div className="flex items-center gap-1 flex-1 justify-center">
               <ScoreInput value={v.home_ft} onChange={val => set('home_ft', val)} />
@@ -237,7 +237,7 @@ export default function MatchPredictionCard({
               <ScoreInput value={v.away_ft} onChange={val => set('away_ft', val)} />
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#edeae3]">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
             <span className="text-xs text-[#888] w-28 flex-shrink-0">Ruststand</span>
             <div className="flex items-center gap-1 flex-1 justify-center">
               <ScoreInput value={v.home_ht} onChange={val => set('home_ht', val)} />
@@ -245,7 +245,7 @@ export default function MatchPredictionCard({
               <ScoreInput value={v.away_ht} onChange={val => set('away_ht', val)} />
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#edeae3]">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
             <span className="flex items-center gap-1.5 text-xs text-[#888] w-28 flex-shrink-0"><YellowCard />Geel</span>
             <div className="flex items-center gap-1 flex-1 justify-center">
               <ScoreInput value={v.home_yellow} onChange={val => set('home_yellow', val)} />
@@ -253,7 +253,7 @@ export default function MatchPredictionCard({
               <ScoreInput value={v.away_yellow} onChange={val => set('away_yellow', val)} />
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#edeae3]">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
             <span className="flex items-center gap-1.5 text-xs text-[#888] w-28 flex-shrink-0"><RedCard />Rood</span>
             <div className="flex items-center gap-1 flex-1 justify-center">
               <ScoreInput value={v.home_red} onChange={val => set('home_red', val)} />
@@ -264,7 +264,7 @@ export default function MatchPredictionCard({
 
           {/* Knockout extras */}
           {!isGroup && (
-            <div className="px-3 py-2.5 border-b border-[#edeae3] space-y-2">
+            <div className="px-3 py-2.5 border-b border-[#f6f4ef] space-y-2">
               {[['Verlenging?', 'et_predicted'], ['Strafschoppen?', 'pens_predicted']].map(([lbl, key]) => (
                 <div key={key} className="flex items-center gap-2">
                   <span className="text-xs text-[#888] w-28 flex-shrink-0">{lbl}</span>

@@ -1,31 +1,30 @@
 // app/admin/results/page.tsx
 import { createClient } from '@/lib/supabase/server'
-import AdminResultsClient from '@/components/admin/AdminResultsClient'
+import AdminResultForm from '@/components/admin/AdminResultForm'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminResultsPage() {
   const supabase = await createClient()
 
-  // Pending uitslagen die nog gepubliceerd moeten worden
-  const { data: pending } = await supabase
-    .from('pending_results')
-    .select('*, match:match_id(*, home_team:home_team_id(*), away_team:away_team_id(*))')
-    .eq('status', 'pending')
-    .order('synced_at', { ascending: true })
-
-  // Recent gepubliceerde uitslagen
-  const { data: published } = await supabase
-    .from('pending_results')
-    .select('*, match:match_id(*, home_team:home_team_id(*), away_team:away_team_id(*))')
-    .eq('status', 'published')
-    .order('published_at', { ascending: false })
-    .limit(10)
+  const { data: matches } = await supabase
+    .from('matches')
+    .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
+    .order('scheduled_at', { ascending: true })
 
   return (
-    <AdminResultsClient
-      pending={pending || []}
-      published={published || []}
-    />
+    <div className="max-w-3xl space-y-4">
+      <div>
+        <h1 className="heading text-2xl font-extrabold text-gray-900">Uitslagen</h1>
+        <p className="text-sm text-gray-400 mt-0.5">
+          Vul alle velden in en klik op Publiceer — pas dan wordt de uitslag zichtbaar voor deelnemers.
+        </p>
+      </div>
+      <div className="space-y-3">
+        {(matches || []).map(m => (
+          <AdminResultForm key={m.id} match={m} />
+        ))}
+      </div>
+    </div>
   )
 }

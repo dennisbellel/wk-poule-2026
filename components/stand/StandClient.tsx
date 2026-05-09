@@ -3,14 +3,13 @@ import { useState } from 'react'
 import type { LeaderboardEntry } from '@/types'
 
 export default function StandClient({
-  leaderboard, currentUserId, matchPredictions,
+  leaderboard, currentUserId,
 }: {
   leaderboard: (LeaderboardEntry & { rank: number })[]
   currentUserId: string
-  matchPredictions: Array<{ user_id: string; points: number; match: { scheduled_at: string } | null }>
+  matchPredictions?: Array<{ user_id: string; points: number; match: { scheduled_at: string } | null }>
 }) {
   const [view, setView] = useState<'total' | 'breakdown'>('total')
-
   const topEntry = leaderboard[0]
 
   return (
@@ -24,7 +23,9 @@ export default function StandClient({
         <div className="flex gap-1 bg-[#f6f4ef] rounded-xl p-1">
           {[['total', 'Totaal'], ['breakdown', 'Breakdown']].map(([v, l]) => (
             <button key={v} onClick={() => setView(v as 'total' | 'breakdown')}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold border-0 cursor-pointer transition-colors ${view === v ? 'bg-white text-[#1a5c38] shadow-sm' : 'bg-transparent text-[#aaa]'}`}>
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold border-0 cursor-pointer transition-colors ${
+                view === v ? 'bg-white text-[#1a5c38] shadow-sm' : 'bg-transparent text-[#aaa]'
+              }`}>
               {l}
             </button>
           ))}
@@ -50,11 +51,15 @@ export default function StandClient({
         <div className="card">
           {leaderboard.map(p => (
             <div key={p.user_id}
-              className={`flex items-center gap-3 px-4 py-3.5 border-b border-[#f6f4ef] last:border-0 ${p.user_id === currentUserId ? 'bg-[#eaf4ef]' : 'bg-white'}`}>
+              className={`flex items-center gap-3 px-4 py-3.5 border-b border-[#f6f4ef] last:border-0 ${
+                p.user_id === currentUserId ? 'bg-[#eaf4ef]' : 'bg-white'
+              }`}>
               <span className={`w-6 text-center flex-shrink-0 ${p.rank <= 3 ? 'text-xl' : 'text-xs font-bold text-[#ccc]'}`}>
                 {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : p.rank}
               </span>
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${p.user_id === currentUserId ? 'bg-[#1a5c38]' : 'bg-[#e5e1d8]'}`}>
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                p.user_id === currentUserId ? 'bg-[#1a5c38]' : 'bg-[#e5e1d8]'
+              }`}>
                 <span className={`heading text-sm font-bold ${p.user_id === currentUserId ? 'text-white' : 'text-[#777]'}`}>
                   {p.display_name[0]}
                 </span>
@@ -73,10 +78,6 @@ export default function StandClient({
             </div>
           ))}
         </div>
-
-        <p className="text-xs text-[#aaa] text-center mt-3">
-          🕐 Bij gelijke punten wint degene die het snelst voorspelde
-        </p>
       </div>
     </div>
   )

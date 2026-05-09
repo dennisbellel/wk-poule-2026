@@ -120,9 +120,9 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
         )}
       </aside>
 
-      {/* Hoofd content — gecentreerd met max breedte */}
+      {/* Hoofd content — headers over volle breedte, content gecentreerd */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <main className="flex-1 pb-20 lg:pb-0 w-full max-w-5xl mx-auto">
+        <main className="flex-1 pb-20 lg:pb-0 w-full">
           {children}
         </main>
       </div>

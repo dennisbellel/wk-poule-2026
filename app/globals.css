@@ -44,4 +44,7 @@
            focus:outline-none focus:border-[#1a5c38] focus:bg-[#eaf4ef] transition-colors;
     font-family: 'Bricolage Grotesque', sans-serif;
   }
+  .content-container {
+    @apply max-w-5xl mx-auto;
+  }
 }
