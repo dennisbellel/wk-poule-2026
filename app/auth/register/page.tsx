@@ -82,10 +82,19 @@ function RegisterForm() {
 
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      await supabase.from('profiles').upsert(
-        { id: user.id, email: user.email!, display_name: displayName, is_admin: false },
-        { onConflict: 'id' }
-      )
+      // Check of er al een profiel bestaat — zo ja, alleen displayName updaten en is_admin niet aanraken
+      const { data: existing } = await supabase
+        .from('profiles').select('id').eq('id', user.id).maybeSingle()
+
+      if (existing) {
+        await supabase.from('profiles')
+          .update({ display_name: displayName, email: user.email! })
+          .eq('id', user.id)
+      } else {
+        await supabase.from('profiles').insert({
+          id: user.id, email: user.email!, display_name: displayName, is_admin: false,
+        })
+      }
     }
 
     router.push('/')
