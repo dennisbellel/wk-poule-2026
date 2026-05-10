@@ -54,47 +54,143 @@ export default async function DashboardPage() {
     .select('*', { count: 'exact', head: true })
     .eq('active', true)
 
-  // Punt 7: granulaire "goede antwoorden" — tel correcte individuele inputs
+  // Percentage goed: tel mijn correcte inputs / totaal mogelijke inputs voor alle gespeelde wedstrijden.
+  // "Mogelijke inputs" = aantal velden in gespeelde wedstrijden waar een uitslag bekend is (max 8 per match).
+  const { data: finishedForStats } = await supabase
+    .from('matches')
+    .select('id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
+    .eq('status', 'finished')
+
   const { data: myPredictions } = await supabase
     .from('match_predictions')
-    .select('home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red, match:match_id(home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red, status)')
+    .select('match_id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
     .eq('user_id', user!.id)
 
-  const { data: myBonusAnswersFull } = await supabase
-    .from('bonus_answers')
-    .select('answer, question:question_id(correct_answer)')
-    .eq('user_id', user!.id)
+  const myPredsByMatch = new Map<string, typeof myPredictions extends (infer U)[] | null ? U : never>()
+  for (const p of myPredictions || []) myPredsByMatch.set(p.match_id, p)
 
   let correctInputs = 0
   let totalInputs = 0
-
-  for (const pred of myPredictions || []) {
-    const matchData = Array.isArray(pred.match) ? pred.match[0] : pred.match
-    const m = matchData as { home_ft: number | null; away_ft: number | null; home_ht: number | null; away_ht: number | null; home_yellow: number | null; away_yellow: number | null; home_red: number | null; away_red: number | null; status: string } | null
-    if (!m || m.status !== 'finished') continue
-    const fields: Array<[unknown, unknown]> = [
-      [pred.home_ft, m.home_ft], [pred.away_ft, m.away_ft],
-      [pred.home_ht, m.home_ht], [pred.away_ht, m.away_ht],
-      [pred.home_yellow, m.home_yellow], [pred.away_yellow, m.away_yellow],
-      [pred.home_red, m.home_red], [pred.away_red, m.away_red],
+  for (const m of finishedForStats || []) {
+    const fields: Array<[number | null, keyof typeof m, string]> = [
+      [m.home_ft, 'home_ft', 'home_ft'], [m.away_ft, 'away_ft', 'away_ft'],
+      [m.home_ht, 'home_ht', 'home_ht'], [m.away_ht, 'away_ht', 'away_ht'],
+      [m.home_yellow, 'home_yellow', 'home_yellow'], [m.away_yellow, 'away_yellow', 'away_yellow'],
+      [m.home_red, 'home_red', 'home_red'], [m.away_red, 'away_red', 'away_red'],
     ]
-    for (const [p, a] of fields) {
-      if (p !== null && a !== null) {
-        totalInputs++
-        if (p === a) correctInputs++
-      }
+    const myPred = myPredsByMatch.get(m.id)
+    for (const [actual, , predKey] of fields) {
+      if (actual === null) continue
+      totalInputs++
+      const myVal = myPred ? (myPred as Record<string, number | null>)[predKey] : null
+      if (myVal === actual) correctInputs++
     }
   }
 
-  for (const ans of myBonusAnswersFull || []) {
-    const questionData = Array.isArray(ans.question) ? ans.question[0] : ans.question
-    const q = questionData as { correct_answer: string | null } | null
-    if (!q?.correct_answer) continue
+  // Bonusvragen: ook meetellen als "had goed kunnen zijn" zodra correct_answer gezet is
+  const { data: publishedBonusQs } = await supabase
+    .from('bonus_questions')
+    .select('id, correct_answer')
+    .not('correct_answer', 'is', null)
+
+  const { data: myBonusAnswersFull } = await supabase
+    .from('bonus_answers')
+    .select('question_id, answer')
+    .eq('user_id', user!.id)
+
+  const myBonusByQ = new Map((myBonusAnswersFull || []).map(a => [a.question_id, a.answer]))
+  for (const q of publishedBonusQs || []) {
+    if (!q.correct_answer) continue
     totalInputs++
-    if (ans.answer?.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()) correctInputs++
+    const myAns = myBonusByQ.get(q.id)
+    if (myAns?.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()) correctInputs++
   }
 
   const correctPct = totalInputs > 0 ? Math.round((correctInputs / totalInputs) * 100) : 0
+
+  // Bijzondere scores feed: per recent gepubliceerde wedstrijd één statement
+  const { data: recentFinished } = await supabase
+    .from('matches')
+    .select('id, scheduled_at, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red, home_team:home_team_id(name_nl, flag), away_team:away_team_id(name_nl, flag)')
+    .eq('status', 'finished')
+    .order('scheduled_at', { ascending: false })
+    .limit(5)
+
+  type FeedItem = {
+    matchId: string
+    homeFlag: string; homeName: string
+    awayFlag: string; awayName: string
+    homeFt: number; awayFt: number
+    headline: string
+    headlineEmoji: string
+    sub: string | null
+  }
+  const feedItems: FeedItem[] = []
+
+  if (recentFinished && recentFinished.length > 0) {
+    const matchIds = recentFinished.map(m => m.id)
+    const { data: predsForRecent } = await supabase
+      .from('match_predictions')
+      .select('match_id, user_id, points, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red, profile:user_id(display_name)')
+      .in('match_id', matchIds)
+
+    for (const m of recentFinished) {
+      const homeTeam = Array.isArray(m.home_team) ? m.home_team[0] : m.home_team
+      const awayTeam = Array.isArray(m.away_team) ? m.away_team[0] : m.away_team
+      const matchPreds = (predsForRecent || []).filter(p => p.match_id === m.id)
+
+      type FieldKey = 'home_ft' | 'away_ft' | 'home_ht' | 'away_ht' | 'home_yellow' | 'away_yellow' | 'home_red' | 'away_red'
+      const fieldKeys: FieldKey[] = ['home_ft', 'away_ft', 'home_ht', 'away_ht', 'home_yellow', 'away_yellow', 'home_red', 'away_red']
+      function correctCount(p: Record<string, unknown>): number {
+        let c = 0
+        for (const k of fieldKeys) {
+          const actual = (m as unknown as Record<string, number | null>)[k]
+          if (actual !== null && p[k] === actual) c++
+        }
+        return c
+      }
+
+      const exactScorers = matchPreds.filter(p => p.home_ft === m.home_ft && p.away_ft === m.away_ft)
+      const perfectScorers = matchPreds.filter(p => correctCount(p as unknown as Record<string, unknown>) === 8)
+
+      const topScorer = matchPreds.length > 0
+        ? [...matchPreds].sort((a, b) => (b.points ?? 0) - (a.points ?? 0))[0]
+        : null
+      const topName = topScorer
+        ? (Array.isArray(topScorer.profile) ? topScorer.profile[0]?.display_name : (topScorer.profile as { display_name?: string } | null)?.display_name)
+        : null
+
+      let headline = ''
+      let headlineEmoji = ''
+      if (perfectScorers.length > 0) {
+        const perfectNames = perfectScorers.map(p => Array.isArray(p.profile) ? p.profile[0]?.display_name : (p.profile as { display_name?: string } | null)?.display_name).filter(Boolean)
+        headlineEmoji = '⭐'
+        headline = perfectScorers.length === 1
+          ? `Perfect! ${perfectNames[0]} had alles goed`
+          : `${perfectScorers.length} deelnemers hadden alles goed`
+      } else if (exactScorers.length === 0) {
+        headlineEmoji = '🤷'
+        headline = 'Niemand had de uitslag goed'
+      } else if (exactScorers.length === 1) {
+        const name = Array.isArray(exactScorers[0].profile) ? exactScorers[0].profile[0]?.display_name : (exactScorers[0].profile as { display_name?: string } | null)?.display_name
+        headlineEmoji = '🎯'
+        headline = `${name} had als enige de uitslag goed`
+      } else {
+        headlineEmoji = '🤝'
+        headline = `${exactScorers.length} deelnemers hadden de uitslag goed`
+      }
+
+      feedItems.push({
+        matchId: m.id,
+        homeFlag: homeTeam?.flag ?? '', homeName: homeTeam?.name_nl ?? '?',
+        awayFlag: awayTeam?.flag ?? '', awayName: awayTeam?.name_nl ?? '?',
+        homeFt: m.home_ft ?? 0, awayFt: m.away_ft ?? 0,
+        headline, headlineEmoji,
+        sub: topScorer && (topScorer.points ?? 0) > 0 && topName ? `Topscoorder: ${topName} · ${topScorer.points} pt` : null,
+      })
+    }
+  }
+
 
   const now = new Date()
   const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -175,57 +271,68 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Mobile hero */}
+      {/* Mobile hero — geen card-stats meer in de hero, die staan eronder */}
       <div className="lg:hidden bg-[#1a5c38] px-5 pt-8 pb-6">
         <p className="text-xs text-white/60 mb-1">Dé WK Poule 2026</p>
-        <h1 className="heading text-2xl font-extrabold text-white mb-4">
+        <h1 className="heading text-2xl font-extrabold text-white">
           Hey {profile?.display_name} 👋
         </h1>
-        <div className="grid grid-cols-3 gap-2.5">
-          {[
-            ['Punten', String(myEntry?.total_points ?? 0)],
-            ['Positie', myEntry ? `${myEntry.rank}/${leaderboard.length}` : '—'],
-            ['Goed', `${correctPct}%`],
-          ].map(([lbl, val]) => (
-            <div key={lbl} className="bg-white/10 rounded-xl px-3 py-3">
-              <p className="text-[11px] text-white/60 mb-0.5">{lbl}</p>
-              <p className="heading text-xl font-extrabold text-white">{val}</p>
-            </div>
-          ))}
-        </div>
       </div>
 
       <div className="p-4 lg:p-8 space-y-5">
-        {/* Stats row desktop */}
-        <div className="hidden lg:grid grid-cols-3 gap-4">
+        {/* Stats cards: 3 witte cards, volgorde positie / punten / goed */}
+        <div className="grid grid-cols-3 gap-2.5 lg:gap-4">
           {[
-            {
-              label: 'Totaal punten',
-              value: String(myEntry?.total_points ?? 0),
-              sub: `${myEntry?.match_points ?? 0} wedstrijd + ${myEntry?.group_points ?? 0} poule + ${myEntry?.bonus_points ?? 0} bonus`,
-              accent: true,
-            },
             {
               label: 'Positie',
               value: myEntry ? `${myEntry.rank}/${leaderboard.length}` : '—',
-              sub: 'In de tussenstand',
-              accent: false,
             },
             {
-              // Punt 7: granulaire correcte antwoorden over alle inputs
-              label: 'Goede antwoorden',
+              label: 'Punten',
+              value: String(myEntry?.total_points ?? 0),
+            },
+            {
+              label: 'Goed',
               value: `${correctPct}%`,
-              sub: `${correctInputs} van ${totalInputs} invoeren correct`,
-              accent: false,
             },
           ].map(s => (
-            <div key={s.label} className={`rounded-2xl p-5 border ${s.accent ? 'bg-[#1a5c38] border-[#1a5c38]' : 'bg-white border-[#e5e1d8]'}`}>
-              <p className={`text-xs uppercase tracking-wide mb-1 ${s.accent ? 'text-white/60' : 'text-[#aaa]'}`}>{s.label}</p>
-              <p className={`heading text-3xl font-extrabold ${s.accent ? 'text-white' : 'text-gray-900'}`}>{s.value}</p>
-              <p className={`text-xs mt-1 ${s.accent ? 'text-white/50' : 'text-[#aaa]'}`}>{s.sub}</p>
+            <div key={s.label} className="rounded-2xl p-4 lg:p-5 border bg-white border-[#e5e1d8]">
+              <p className="text-xs uppercase tracking-wide mb-1 text-[#aaa]">{s.label}</p>
+              <p className="heading text-2xl lg:text-3xl font-extrabold text-gray-900">{s.value}</p>
             </div>
           ))}
         </div>
+
+        {/* Feed: bijzondere scores per recente wedstrijd */}
+        {feedItems.length > 0 && (
+          <div className="card">
+            <div className="px-4 py-3 border-b border-[#f6f4ef]">
+              <span className="text-sm font-semibold">Recente wedstrijden</span>
+            </div>
+            {feedItems.map(item => (
+              <div key={item.matchId} className="px-4 py-3 border-b border-[#f6f4ef] last:border-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-sm font-medium flex-1 truncate">
+                    {item.homeFlag} {item.homeName}
+                  </span>
+                  <span className="heading text-base font-extrabold text-[#1a5c38] px-2">
+                    {item.homeFt}–{item.awayFt}
+                  </span>
+                  <span className="text-sm font-medium flex-1 truncate text-right">
+                    {item.awayName} {item.awayFlag}
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-base">{item.headlineEmoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-700">{item.headline}</p>
+                    {item.sub && <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="space-y-4">

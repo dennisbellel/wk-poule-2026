@@ -146,20 +146,22 @@ export default function MatchPredictionCard({
                 <span className="heading text-lg font-extrabold text-[#1a1a1a]">
                   {match.home_ft} – {match.away_ft}
                 </span>
-                <div className="text-[10px] text-[#ccc]">rust {match.home_ht} – {match.away_ht}</div>
               </div>
               <span className="flex-1 text-sm font-semibold text-right">{awayLabel} {awayFlag}</span>
             </div>
-            {/* Kaarten bij uitslag */}
-            <div className="flex justify-between px-1">
-              <div className="flex items-center gap-1.5 text-[11px] text-[#aaa]">
+            {/* Kaarten + ruststand op één regel: kaarten links/rechts, ruststand centraal */}
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-[#aaa] flex-1">
                 {Array.from({ length: Math.min(match.home_yellow ?? 0, 5) }).map((_, i) => <YellowCard key={i} />)}
                 {(match.home_yellow ?? 0) > 0 && <span>{match.home_yellow}</span>}
                 {(match.home_red ?? 0) > 0 && (
                   <><RedCard /><span>{match.home_red}</span></>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-[#aaa]">
+              <div className="text-[11px] text-[#aaa] text-center flex-shrink-0">
+                rust {match.home_ht}–{match.away_ht}
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-[#aaa] flex-1 justify-end">
                 {(match.away_red ?? 0) > 0 && (
                   <><span>{match.away_red}</span><RedCard /></>
                 )}
@@ -180,7 +182,7 @@ export default function MatchPredictionCard({
       {/* Voorspelling sectie */}
       {isFinished && hasExisting && (
         <div>
-          <div className="px-3 pt-2.5 pb-0">
+          <div className="px-3 pt-2.5 pb-0 text-center">
             <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wide">Jouw voorspelling</p>
           </div>
           <PredRow
@@ -218,10 +220,10 @@ export default function MatchPredictionCard({
               )}
             </>
           )}
-          {/* Totaal */}
-          <div className="flex justify-between items-center px-3 py-2.5 bg-[#f6f4ef]">
-            <span className="text-xs text-[#888]">Totaal deze wedstrijd</span>
-            <span className="text-base font-bold text-[#1a5c38]">{breakdown.total} pt</span>
+          {/* Totaal — witte achtergrond, vetgedrukt voor leesbaarheid */}
+          <div className="flex justify-between items-center px-3 py-3 bg-white border-t border-[#f6f4ef]">
+            <span className="text-sm font-bold text-gray-900">Totaal deze wedstrijd</span>
+            <span className="text-base font-extrabold text-[#1a5c38]">{breakdown.total} pt</span>
           </div>
         </div>
       )}
@@ -236,7 +238,7 @@ export default function MatchPredictionCard({
       {/* Vergrendeld: toon voorspelling readonly */}
       {isLocked && hasExisting && (
         <div>
-          <div className="px-3 pt-2.5 pb-0">
+          <div className="px-3 pt-2.5 pb-0 text-center">
             <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wide">Jouw voorspelling</p>
           </div>
           <PredRow label="Eindstand" homeVal={v.home_ft ?? '–'} awayVal={v.away_ft ?? '–'} />

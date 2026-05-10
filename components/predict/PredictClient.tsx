@@ -31,11 +31,11 @@ export default function PredictClient({
 }) {
   const supabase = createClient()
 
-  // Drie hoofd-tabs op het bovenste niveau
-  const [mainTab, setMainTab] = useState<'group' | 'bonus' | 'knockout'>('group')
+  // Drie hoofd-tabs: Groepsfase / Knockout / Toernooi
+  const [mainTab, setMainTab] = useState<'group' | 'knockout' | 'tournament'>('group')
 
-  // Sub-tabs binnen groepsfase
-  const [groupTab, setGroupTab] = useState(0) // 0=wedstrijden, 1=poulestand
+  // Sub-tabs binnen groepsfase: 0=wedstrijden, 1=poulestand, 2=bonusvragen
+  const [groupTab, setGroupTab] = useState(0)
   const [koRound, setKoRound] = useState('r32')
   const [activeGroup, setActiveGroup] = useState('A')
 
@@ -101,8 +101,8 @@ export default function PredictClient({
 
   const MAIN_TABS = [
     { id: 'group', label: '⚽ Groepsfase' },
-    { id: 'bonus', label: '🎯 Bonusvragen' },
     { id: 'knockout', label: '🏆 Knockout' },
+    { id: 'tournament', label: '🎯 Toernooi vragen' },
   ]
 
   return (
@@ -140,7 +140,7 @@ export default function PredictClient({
       {mainTab === 'group' && (
         <>
           <div className="bg-white border-b border-[#e5e1d8] flex px-4 lg:px-8">
-            {['⚽ Wedstrijden', '📊 Poulestand'].map((t, i) => (
+            {['⚽ Wedstrijden', '📊 Poulestand', '🎯 Bonusvragen'].map((t, i) => (
               <button
                 key={i}
                 onClick={() => setGroupTab(i)}
@@ -201,21 +201,46 @@ export default function PredictClient({
                 />
               </div>
             )}
+
+            {groupTab === 2 && (
+              <div className="max-w-xl space-y-3">
+                {groupQs.length === 0 ? (
+                  <div className="text-center py-12 text-[#aaa]">
+                    <p className="text-3xl mb-3">🎯</p>
+                    <p className="text-sm">Nog geen bonusvragen voor de groepsfase.</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-[#aaa] mb-1">Sluiten bij start van het toernooi</p>
+                    {groupQs.map(q => (
+                      <BonusQuestionItem
+                        key={q.id} question={q}
+                        value={localBonusAnswers[q.id] || ''}
+                        teams={teams} players={players}
+                        onSave={val => saveBonusAnswer(q.id, val)}
+                      />
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}
 
-      {/* ── BONUSVRAGEN ── */}
-      {mainTab === 'bonus' && (
+      {/* ── TOERNOOI VRAGEN ── (overkoepelend + knockout-fase + live) */}
+      {mainTab === 'tournament' && (
         <div className="p-4 lg:p-8 max-w-xl space-y-6">
-
-          {/* Groepsfase bonusvragen */}
-          {groupQs.length > 0 && (
+          {/* Heel toernooi */}
+          {tourQs.length > 0 && (
             <div>
-              <h2 className="text-sm font-semibold text-gray-800 mb-1">Groepsfase</h2>
-              <p className="text-xs text-[#aaa] mb-3">Sluiten bij start van het toernooi</p>
+              <div className="flex justify-between items-center mb-1">
+                <h2 className="text-sm font-semibold text-gray-800">Heel toernooi</h2>
+                <span className="tag bg-amber-50 text-amber-700">Aanpasbaar tot 11 jun</span>
+              </div>
+              <p className="text-xs text-[#aaa] mb-3">Jouw grote voorspellingen</p>
               <div className="space-y-3">
-                {groupQs.map(q => (
+                {tourQs.map(q => (
                   <BonusQuestionItem
                     key={q.id} question={q}
                     value={localBonusAnswers[q.id] || ''}
@@ -227,34 +252,10 @@ export default function PredictClient({
             </div>
           )}
 
-          {/* Heel toernooi */}
-          {tourQs.length > 0 && (
-            <>
-              {groupQs.length > 0 && <div className="h-px bg-[#e5e1d8]" />}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <h2 className="text-sm font-semibold text-gray-800">Heel toernooi</h2>
-                  <span className="tag bg-amber-50 text-amber-700">Aanpasbaar tot 11 jun</span>
-                </div>
-                <p className="text-xs text-[#aaa] mb-3">Jouw grote voorspellingen</p>
-                <div className="space-y-3">
-                  {tourQs.map(q => (
-                    <BonusQuestionItem
-                      key={q.id} question={q}
-                      value={localBonusAnswers[q.id] || ''}
-                      teams={teams} players={players}
-                      onSave={val => saveBonusAnswer(q.id, val)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
           {/* Knockoutfase bonusvragen */}
           {knockoutQs.length > 0 && (
             <>
-              <div className="h-px bg-[#e5e1d8]" />
+              {tourQs.length > 0 && <div className="h-px bg-[#e5e1d8]" />}
               <div>
                 <h2 className="text-sm font-semibold text-gray-800 mb-1">Knockoutfase</h2>
                 <div className="space-y-3">
@@ -295,10 +296,10 @@ export default function PredictClient({
             </>
           )}
 
-          {overarchingQs.length === 0 && groupQs.length === 0 && (
+          {overarchingQs.length === 0 && (
             <div className="text-center py-12 text-[#aaa]">
               <p className="text-3xl mb-3">🎯</p>
-              <p className="text-sm">Nog geen bonusvragen beschikbaar.</p>
+              <p className="text-sm">Nog geen toernooivragen beschikbaar.</p>
             </div>
           )}
         </div>

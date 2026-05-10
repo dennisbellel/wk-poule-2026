@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { calculateMatchPoints } from '@/lib/points/calculate'
-import type { ScoringKeys, Match, MatchPrediction } from '@/types'
+import { calculateMatchPoints, sortLeaderboard } from '@/lib/points/calculate'
+import type { ScoringKeys, Match, MatchPrediction, LeaderboardEntry } from '@/types'
 
 interface PublishBody {
   match_id: string
@@ -32,6 +32,17 @@ export async function POST(request: Request) {
   if (!body.match_id) return NextResponse.json({ error: 'match_id required' }, { status: 400 })
 
   const admin = await createAdminClient()
+
+  // Eerst: bewaar de huidige ranks als 'previous_rank' zodat we straks delta's kunnen tonen
+  const { data: lbBefore } = await admin.from('leaderboard').select('*')
+  if (lbBefore) {
+    const ranked = sortLeaderboard(lbBefore as LeaderboardEntry[])
+    await Promise.all(
+      ranked.map(r =>
+        admin.from('profiles').update({ previous_rank: r.rank }).eq('id', r.user_id)
+      )
+    )
+  }
 
   const { data: dbMatch, error: matchErr } = await admin
     .from('matches').select('*').eq('id', body.match_id).single()
