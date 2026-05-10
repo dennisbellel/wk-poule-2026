@@ -32,14 +32,6 @@ export default function ProfileClient({ profile }: { profile: Profile | null }) 
             <p className="text-sm text-[#aaa]">{profile?.email}</p>
           </div>
 
-          {/* Help / rondleiding */}
-          <button
-            onClick={() => window.dispatchEvent(new Event('open-help'))}
-            className="w-full bg-white border border-[#e5e1d8] rounded-2xl py-3.5 text-sm font-semibold text-gray-700 flex items-center justify-center gap-2 cursor-pointer hover:bg-[#f6f4ef] transition-colors"
-          >
-            ❓ Bekijk de rondleiding
-          </button>
-
           {/* Account info */}
           <div className="card p-4">
             <p className="text-sm font-semibold mb-1">Accountgegevens</p>

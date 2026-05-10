@@ -31,8 +31,8 @@ export default function PredictClient({
 }) {
   const supabase = createClient()
 
-  // Drie hoofd-tabs: Groepsfase / Knockout / Toernooi
-  const [mainTab, setMainTab] = useState<'group' | 'knockout' | 'tournament'>('group')
+  // Vier hoofd-tabs: Groepsfase / Knockout / Toernooi / Bonusvragen (= live)
+  const [mainTab, setMainTab] = useState<'group' | 'knockout' | 'tournament' | 'live'>('group')
 
   // Sub-tabs binnen groepsfase: 0=wedstrijden, 1=poulestand, 2=bonusvragen
   const [groupTab, setGroupTab] = useState(0)
@@ -102,7 +102,8 @@ export default function PredictClient({
   const MAIN_TABS = [
     { id: 'group', label: '⚽ Groepsfase' },
     { id: 'knockout', label: '🏆 Knockout' },
-    { id: 'tournament', label: '🎯 Toernooi vragen' },
+    { id: 'tournament', label: '🎯 Toernooi' },
+    { id: 'live', label: '🔴 Bonusvragen' },
   ]
 
   return (
@@ -204,6 +205,7 @@ export default function PredictClient({
                   })}
                 </div>
                 <GroupStandingForm
+                  key={activeGroup}
                   groupId={activeGroup}
                   teams={teams.filter(t => t.group_id === activeGroup)}
                   predictions={groupPredictions.filter(p => p.group_id === activeGroup)}
@@ -238,17 +240,14 @@ export default function PredictClient({
         </>
       )}
 
-      {/* ── TOERNOOI VRAGEN ── (overkoepelend + knockout-fase + live) */}
+      {/* ── TOERNOOI ── (overkoepelend + knockout-fase) */}
       {mainTab === 'tournament' && (
         <div className="p-4 lg:p-8 max-w-xl space-y-6">
           {/* Heel toernooi */}
           {tourQs.length > 0 && (
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <h2 className="text-sm font-semibold text-gray-800">Heel toernooi</h2>
-                <span className="tag bg-amber-50 text-amber-700">Aanpasbaar tot 11 jun</span>
-              </div>
-              <p className="text-xs text-[#aaa] mb-3">Jouw grote voorspellingen</p>
+              <h2 className="text-sm font-semibold text-gray-800 mb-1">Heel toernooi</h2>
+              <p className="text-xs text-[#aaa] mb-3">Jouw grote voorspellingen — sluiten bij start van het WK</p>
               <div className="space-y-3">
                 {tourQs.map(q => (
                   <BonusQuestionItem
@@ -282,34 +281,41 @@ export default function PredictClient({
             </>
           )}
 
-          {/* Live / actuele vragen */}
-          {liveQs.length > 0 && (
-            <>
-              <div className="h-px bg-[#e5e1d8]" />
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <h2 className="text-sm font-semibold text-gray-800">Actueel</h2>
-                  <span className="tag bg-red-50 text-red-600">🔴 Live</span>
-                </div>
-                <p className="text-xs text-[#aaa] mb-3">Tijdelijke vragen — let op de deadline</p>
-                <div className="space-y-3">
-                  {liveQs.map(q => (
-                    <BonusQuestionItem
-                      key={q.id} question={q}
-                      value={localBonusAnswers[q.id] || ''}
-                      teams={teams} players={players}
-                      onSave={val => saveBonusAnswer(q.id, val)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {overarchingQs.length === 0 && (
+          {tourQs.length === 0 && knockoutQs.length === 0 && (
             <div className="text-center py-12 text-[#aaa]">
               <p className="text-3xl mb-3">🎯</p>
               <p className="text-sm">Nog geen toernooivragen beschikbaar.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── BONUSVRAGEN ── (live / actuele vragen) */}
+      {mainTab === 'live' && (
+        <div className="p-4 lg:p-8 max-w-xl space-y-3">
+          {liveQs.length > 0 ? (
+            <>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-sm font-semibold text-gray-800">Bonusvragen</h2>
+                <span className="tag bg-red-50 text-red-600">🔴 Live</span>
+              </div>
+              <p className="text-xs text-[#aaa] mb-3">Tijdelijke vragen tijdens het toernooi — let op de deadline</p>
+              <div className="space-y-3">
+                {liveQs.map(q => (
+                  <BonusQuestionItem
+                    key={q.id} question={q}
+                    value={localBonusAnswers[q.id] || ''}
+                    teams={teams} players={players}
+                    onSave={val => saveBonusAnswer(q.id, val)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-12 text-[#aaa]">
+              <p className="text-3xl mb-3">🔴</p>
+              <p className="text-sm font-semibold text-gray-600 mb-1">Geen actieve bonusvragen</p>
+              <p className="text-sm">Tijdens het toernooi kunnen hier extra vragen verschijnen.</p>
             </div>
           )}
         </div>

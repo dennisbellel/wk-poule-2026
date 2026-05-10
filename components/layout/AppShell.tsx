@@ -165,16 +165,6 @@ export default function AppShell({
             )
           })}
         </nav>
-        {/* Help-knop boven het profielblok */}
-        <div className="px-3 pb-2">
-          <button
-            onClick={openHelp}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-[#f6f4ef] transition-colors cursor-pointer border-0 bg-transparent"
-          >
-            <span className="text-base w-5 text-center">❓</span>
-            Help
-          </button>
-        </div>
         {profile && (
           <div className="p-4 border-t border-[#e5e1d8] flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-[#1a5c38] flex items-center justify-center flex-shrink-0">
@@ -189,7 +179,15 @@ export default function AppShell({
       </aside>
 
       {/* Hoofd content — headers over volle breedte, content gecentreerd */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col relative">
+        {/* Help-knop rechtsboven, altijd bereikbaar */}
+        <button
+          onClick={openHelp}
+          className="absolute top-3 right-3 lg:top-4 lg:right-6 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 lg:bg-white border border-[#e5e1d8] text-xs font-semibold text-gray-700 hover:bg-[#f6f4ef] shadow-sm transition-colors cursor-pointer backdrop-blur-sm"
+        >
+          <span className="text-sm">❓</span>
+          Help
+        </button>
         <main className="flex-1 pb-20 lg:pb-0 w-full">
           {children}
         </main>
