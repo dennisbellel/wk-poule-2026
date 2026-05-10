@@ -85,7 +85,7 @@ export default function OnboardingTour({
       title: 'Klaar voor de aftrap?',
       body: (
         <>
-          <p>Vragen later? Klik linksonder op <b>❓ Help</b> om deze rondleiding opnieuw te bekijken.</p>
+          <p>Vragen later? Klik op <b>❓ Help</b> in de zijbalk (desktop) of via de knop op je profielpagina om deze rondleiding opnieuw te zien.</p>
           <p>Tijd om je eerste voorspellingen te doen. We hebben een paar toernooivragen voor je klaarstaan — wie wordt wereldkampioen en zo.</p>
           <p className="text-xs text-[#888]">Veel succes, en hou de feed in de gaten 😎</p>
         </>
@@ -110,10 +110,15 @@ export default function OnboardingTour({
           </button>
           <div className="text-3xl mb-1">{current.emoji}</div>
           <h2 className="heading text-xl font-extrabold text-white pr-6">{current.title}</h2>
-          {/* Progress */}
+          {/* Progress — klikbaar om snel te springen */}
           <div className="flex gap-1 mt-3">
             {slides.map((_, i) => (
-              <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= step ? 'bg-white' : 'bg-white/25'}`} />
+              <button
+                key={i}
+                onClick={() => setStep(i)}
+                aria-label={`Naar slide ${i + 1}`}
+                className={`h-1 flex-1 rounded-full transition-colors cursor-pointer border-0 ${i <= step ? 'bg-white' : 'bg-white/25 hover:bg-white/50'}`}
+              />
             ))}
           </div>
         </div>

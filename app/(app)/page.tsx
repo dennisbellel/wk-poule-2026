@@ -21,14 +21,15 @@ export default async function DashboardPage() {
   const leaderboard = sortLeaderboard(lbRaw || [])
   const myEntry = leaderboard.find(e => e.user_id === user!.id)
 
-  const { data: nextMatch } = await supabase
+  // Wedstrijden binnen 24u — voor het 'Komende 24 uur' panel
+  const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  const { data: matchesNext24h } = await supabase
     .from('matches')
     .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
     .eq('status', 'scheduled')
-    .eq('phase', 'group')
+    .gte('scheduled_at', new Date().toISOString())
+    .lte('scheduled_at', in24h.toISOString())
     .order('scheduled_at', { ascending: true })
-    .limit(1)
-    .single()
 
   const { count: predCount } = await supabase
     .from('match_predictions')
@@ -40,10 +41,14 @@ export default async function DashboardPage() {
     .select('*', { count: 'exact', head: true })
     .eq('phase', 'group')
 
-  const { count: groupPredCount } = await supabase
+  // Aantal volledig voorspelde groepen (alle 4 teams ingevuld)
+  const { data: myGroupPreds } = await supabase
     .from('group_standing_predictions')
-    .select('*', { count: 'exact', head: true })
+    .select('group_id')
     .eq('user_id', user!.id)
+  const groupCounts = new Map<string, number>()
+  for (const p of myGroupPreds || []) groupCounts.set(p.group_id, (groupCounts.get(p.group_id) || 0) + 1)
+  const completedGroups = Array.from(groupCounts.values()).filter(n => n === 4).length
 
   const { count: bonusCount } = await supabase
     .from('bonus_answers')
@@ -277,34 +282,37 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Mobile hero — geen card-stats meer in de hero, die staan eronder */}
-      <div className="lg:hidden bg-[#1a5c38] px-5 pt-8 pb-6">
+      {/* Mobile hero — met de stat-cards erin gevangen */}
+      <div className="lg:hidden bg-[#1a5c38] px-5 pt-8 pb-5">
         <p className="text-xs text-white/60 mb-1">Dé WK Poule 2026</p>
-        <h1 className="heading text-2xl font-extrabold text-white">
+        <h1 className="heading text-2xl font-extrabold text-white mb-4">
           Hey {profile?.display_name} 👋
         </h1>
+        <div className="grid grid-cols-3 gap-2.5">
+          {[
+            { label: 'Positie', value: myEntry ? `${myEntry.rank}/${leaderboard.length}` : '—' },
+            { label: 'Punten', value: String(myEntry?.total_points ?? 0) },
+            { label: 'Goed', value: `${correctPct}%` },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-xl p-3">
+              <p className="text-[10px] uppercase tracking-wide mb-0.5 text-[#aaa]">{s.label}</p>
+              <p className="heading text-xl font-extrabold text-gray-900">{s.value}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="p-4 lg:p-8 space-y-5">
-        {/* Stats cards: 3 witte cards, volgorde positie / punten / goed */}
-        <div className="grid grid-cols-3 gap-2.5 lg:gap-4">
+        {/* Desktop stat cards (mobile staan ze in de hero) */}
+        <div className="hidden lg:grid grid-cols-3 gap-4">
           {[
-            {
-              label: 'Positie',
-              value: myEntry ? `${myEntry.rank}/${leaderboard.length}` : '—',
-            },
-            {
-              label: 'Punten',
-              value: String(myEntry?.total_points ?? 0),
-            },
-            {
-              label: 'Goed',
-              value: `${correctPct}%`,
-            },
+            { label: 'Positie', value: myEntry ? `${myEntry.rank}/${leaderboard.length}` : '—' },
+            { label: 'Punten', value: String(myEntry?.total_points ?? 0) },
+            { label: 'Goed', value: `${correctPct}%` },
           ].map(s => (
-            <div key={s.label} className="rounded-2xl p-4 lg:p-5 border bg-white border-[#e5e1d8]">
+            <div key={s.label} className="rounded-2xl p-5 border bg-white border-[#e5e1d8]">
               <p className="text-xs uppercase tracking-wide mb-1 text-[#aaa]">{s.label}</p>
-              <p className="heading text-2xl lg:text-3xl font-extrabold text-gray-900">{s.value}</p>
+              <p className="heading text-3xl font-extrabold text-gray-900">{s.value}</p>
             </div>
           ))}
         </div>
@@ -418,41 +426,41 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        {/* Sectie 4: Volgende wedstrijd + Voortgang naast elkaar */}
+        {/* Sectie 4: Komende 24u + Voortgang naast elkaar */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Volgende wedstrijd */}
-          {nextMatch ? (
+          {/* Komende 24 uur */}
+          {matchesNext24h && matchesNext24h.length > 0 ? (
             <div className="card">
               <div className="px-4 py-3 border-b border-[#f6f4ef] flex justify-between items-center">
-                <span className="text-sm font-semibold">Volgende wedstrijd</span>
-                <span className="tag bg-amber-50 text-amber-700">⚡ Voorspel</span>
+                <span className="text-sm font-semibold">Komende 24 uur</span>
+                <span className="tag bg-amber-50 text-amber-700">{matchesNext24h.length} {matchesNext24h.length === 1 ? 'wedstrijd' : 'wedstrijden'}</span>
               </div>
-              <div className="p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="tag bg-[#eaf4ef] text-[#1a5c38]">Groep {nextMatch.group_id}</span>
-                  <span className="text-xs text-[#aaa]">
-                    {formatDateShortNL(nextMatch.scheduled_at)} · {formatTimeNL(nextMatch.scheduled_at)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="flex-1 text-sm font-semibold">
-                    {nextMatch.home_team?.flag} {nextMatch.home_team?.name_nl}
-                  </span>
-                  <div className="bg-[#f6f4ef] px-3 py-1.5 rounded-lg">
-                    <span className="text-xs text-[#ccc]">vs</span>
-                  </div>
-                  <span className="flex-1 text-sm font-semibold text-right">
-                    {nextMatch.away_team?.name_nl} {nextMatch.away_team?.flag}
-                  </span>
-                </div>
-                <Link href="/predict" className="btn-primary block text-center w-full py-3">
-                  Voorspelling invullen →
-                </Link>
-              </div>
+              {matchesNext24h.map(m => {
+                const hasPred = predictedMatchIds.has(m.id)
+                return (
+                  <Link key={m.id} href="/predict" className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 hover:bg-[#fafaf9] transition-colors">
+                    <div className="flex flex-col items-center w-12 flex-shrink-0">
+                      <span className="text-[10px] text-[#aaa]">{formatDateShortNL(m.scheduled_at)}</span>
+                      <span className="text-sm font-semibold">{formatTimeNL(m.scheduled_at)}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">
+                        {m.home_team?.flag} {m.home_team?.name_nl ?? m.home_team_placeholder ?? '?'} — {m.away_team?.name_nl ?? m.away_team_placeholder ?? '?'} {m.away_team?.flag}
+                      </p>
+                      <p className="text-[11px] text-[#aaa] mt-0.5">
+                        {m.group_id ? `Groep ${m.group_id}` : (m.phase || '').toUpperCase()}
+                      </p>
+                    </div>
+                    <span className={`tag flex-shrink-0 ${hasPred ? 'bg-[#eaf4ef] text-[#1a5c38]' : 'bg-amber-50 text-amber-700'}`}>
+                      {hasPred ? '✓ Klaar' : 'Voorspel'}
+                    </span>
+                  </Link>
+                )
+              })}
             </div>
           ) : (
             <div className="card p-6 text-center text-sm text-[#aaa]">
-              Geen aankomende wedstrijden
+              Geen wedstrijden in de komende 24 uur
             </div>
           )}
 
@@ -463,7 +471,7 @@ export default async function DashboardPage() {
             </div>
             {[
               ['Wedstrijden', predCount ?? 0, totalGroupMatches ?? 48],
-              ['Poulestand', Math.floor((groupPredCount ?? 0) / 4), 12],
+              ['Poulestand (groepen af)', completedGroups, 12],
               ['Bonusvragen', bonusCount ?? 0, totalBonus ?? 9],
             ].map(([lbl, done, total]) => (
               <div key={String(lbl)} className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0">

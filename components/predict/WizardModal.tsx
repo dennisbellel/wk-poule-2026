@@ -2,11 +2,17 @@
 import { useState, useEffect } from 'react'
 import type { BonusQuestion, Team, Player } from '@/types'
 import { createClient } from '@/lib/supabase/client'
+import { formatDateShortNL } from '@/lib/format'
 import BonusQuestionItem from './BonusQuestionItem'
 
-export default function WizardModal({ onClose }: { onClose: () => void }) {
+export default function WizardModal({
+  onClose, skipIntro = false,
+}: {
+  onClose: () => void
+  skipIntro?: boolean
+}) {
   const supabase = createClient()
-  const [step, setStep] = useState<'intro' | number | 'done'>('intro')
+  const [step, setStep] = useState<'intro' | number | 'done'>(skipIntro ? 0 : 'intro')
   const [questions, setQuestions] = useState<BonusQuestion[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [players, setPlayers] = useState<Player[]>([])
@@ -42,6 +48,23 @@ export default function WizardModal({ onClose }: { onClose: () => void }) {
   // Alleen antwoord bijhouden in lokale state, nog niet opslaan
   function handleChange(questionId: string, val: string) {
     setAnswers(prev => ({ ...prev, [questionId]: val }))
+  }
+
+  // Sluit en sla het huidige antwoord nog op (zodat 'Later invullen' niet alles weggooit)
+  async function handleCloseAndSave() {
+    if (typeof step === 'number' && userId) {
+      const currentQ = tourQs[step]
+      if (currentQ) {
+        const val = answers[currentQ.id] || ''
+        if (val) {
+          await supabase.from('bonus_answers').upsert(
+            { user_id: userId, question_id: currentQ.id, answer: val },
+            { onConflict: 'user_id,question_id' }
+          )
+        }
+      }
+    }
+    onClose()
   }
 
   // Opslaan in database + doorgaan naar volgende stap
@@ -83,7 +106,11 @@ export default function WizardModal({ onClose }: { onClose: () => void }) {
           <p className="text-sm text-gray-600 leading-relaxed mb-1">
             Voordat het toernooi begint, stellen we je {tourQs.length} grote vragen over het hele toernooi.
           </p>
-          <p className="text-xs text-[#aaa] mb-6">Sluit op 11 juni · daarna definitief · tot die tijd aanpasbaar</p>
+          {tourQs.length > 0 && (
+            <p className="text-xs text-[#aaa] mb-6">
+              Sluit {formatDateShortNL(tourQs[0].deadline_at)} · daarna definitief · tot die tijd aanpasbaar
+            </p>
+          )}
           <div className="bg-[#f6f4ef] rounded-2xl p-4 mb-6 text-left space-y-2.5">
             {tourQs.map((q, i) => (
               <div key={q.id} className={`flex items-center gap-3 ${i < tourQs.length - 1 ? 'pb-2.5 border-b border-[#e5e1d8]' : ''}`}>
@@ -95,7 +122,7 @@ export default function WizardModal({ onClose }: { onClose: () => void }) {
           <button onClick={() => setStep(0)} className="btn-primary w-full py-4">
             Start de grote vragen →
           </button>
-          <button onClick={onClose}
+          <button onClick={handleCloseAndSave}
             className="mt-3 w-full bg-transparent border-0 text-[#aaa] text-sm cursor-pointer py-2">
             Sla over — ik doe dit later
           </button>
@@ -192,7 +219,7 @@ export default function WizardModal({ onClose }: { onClose: () => void }) {
                 ← Vorige
               </button>
             )}
-            <button onClick={onClose}
+            <button onClick={handleCloseAndSave}
               className="bg-transparent border-0 text-[#aaa] text-sm cursor-pointer py-1">
               Later invullen
             </button>

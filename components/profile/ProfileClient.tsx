@@ -8,6 +8,7 @@ export default function ProfileClient({ profile }: { profile: Profile | null }) 
   const router = useRouter()
 
   async function handleLogout() {
+    if (!confirm('Weet je zeker dat je wilt uitloggen?')) return
     await supabase.auth.signOut()
     router.push('/auth/login')
   }

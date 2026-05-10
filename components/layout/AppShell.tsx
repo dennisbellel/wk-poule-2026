@@ -28,6 +28,7 @@ export default function AppShell({
   const supabase = createClient()
 
   const [showWizard, setShowWizard] = useState(false)
+  const [wizardSkipIntro, setWizardSkipIntro] = useState(false)
   const [showTour, setShowTour] = useState(false)
   const [tourStartsWizard, setTourStartsWizard] = useState(false)
   const [liveQuestion, setLiveQuestion] = useState<BonusQuestion | null>(null)
@@ -111,7 +112,10 @@ export default function AppShell({
     // 'Aan de slag' → markeer onboarded en start wizard (alleen first-time)
     await markOnboarded()
     setShowTour(false)
-    if (tourStartsWizard) setShowWizard(true)
+    if (tourStartsWizard) {
+      setWizardSkipIntro(true)  // tour was net de welkom, sla wizard-intro over
+      setShowWizard(true)
+    }
     setTourStartsWizard(false)
   }
 
@@ -219,7 +223,12 @@ export default function AppShell({
       )}
 
       {/* Wizard modal */}
-      {showWizard && <WizardModal onClose={() => setShowWizard(false)} />}
+      {showWizard && (
+        <WizardModal
+          skipIntro={wizardSkipIntro}
+          onClose={() => { setShowWizard(false); setWizardSkipIntro(false) }}
+        />
+      )}
 
       {/* Live bonusvraag pop-up */}
       {liveQuestion && !showWizard && (

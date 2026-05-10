@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { BonusQuestion, Team, Player } from '@/types'
 
 const POSITION_LABELS: Record<string, string> = {
@@ -17,6 +17,22 @@ export default function BonusQuestionItem({
 }) {
   const [q, setQ] = useState('')
   const [posFilter, setPosFilter] = useState('')
+  // Lokale state voor text/number — onSave wordt gedebouncet
+  const [localValue, setLocalValue] = useState(value)
+  useEffect(() => { setLocalValue(value) }, [value])
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function handleTypedChange(val: string) {
+    setLocalValue(val)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      if (val !== value) onSave(val)
+    }, 600)
+  }
+  function handleBlur() {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (localValue !== value) onSave(localValue)
+  }
 
   const deadlinePast = new Date(question.deadline_at) < new Date()
   const hasVal = value !== ''
@@ -102,8 +118,9 @@ export default function BonusQuestionItem({
       ) : question.question_type === 'number' ? (
         <input
           type="number" min="0" max="999"
-          value={value}
-          onChange={e => onSave(e.target.value)}
+          value={localValue}
+          onChange={e => handleTypedChange(e.target.value)}
+          onBlur={handleBlur}
           placeholder="Vul een getal in"
           className="w-full border border-[#e5e1d8] rounded-xl px-4 py-2.5 text-sm font-bold
                      bg-[#f6f4ef] outline-none focus:border-[#1a5c38]"
@@ -114,8 +131,9 @@ export default function BonusQuestionItem({
       ) : question.question_type === 'text' ? (
         <input
           type="text"
-          value={value}
-          onChange={e => onSave(e.target.value)}
+          value={localValue}
+          onChange={e => handleTypedChange(e.target.value)}
+          onBlur={handleBlur}
           placeholder="Typ je antwoord..."
           className="w-full border border-[#e5e1d8] rounded-xl px-4 py-2.5 text-sm
                      bg-[#f6f4ef] outline-none focus:border-[#1a5c38]"

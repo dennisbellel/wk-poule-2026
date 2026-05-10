@@ -77,8 +77,20 @@ export default function MatchPredictionCard({
   // 'saved' = net succesvol opgeslagen (toont "✓ Bijgewerkt"). Reset altijd naar false bij mount —
   // bij paginawissel zie je weer "Opslaan" zodat het duidelijk is wat de actie doet.
   const [saved, setSaved] = useState(false)
+  // Snapshot van laatst-opgeslagen state om ongeslagen wijzigingen te detecteren
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState<Partial<MatchPrediction>>(prediction || {})
   // Een voorspelling bestaat al in de DB als prediction != null
   const hasExisting = prediction != null && Object.values(prediction).some(val => val !== null && val !== undefined && val !== '')
+
+  // Detecteer of huidige state afwijkt van laatst opgeslagen state
+  const hasUnsavedChanges = (() => {
+    const keys: (keyof MatchPrediction)[] = ['home_ft','away_ft','home_ht','away_ht','home_yellow','away_yellow','home_red','away_red','et_predicted','pens_predicted','winner_team_id']
+    return keys.some(k => {
+      const a = v[k]
+      const b = lastSavedSnapshot[k]
+      return (a ?? null) !== (b ?? null)
+    })
+  })()
   const set = (k: keyof MatchPrediction, val: unknown) => setV(p => ({ ...p, [k]: val }))
 
   const isPast = new Date(match.prediction_deadline_at) < new Date()
@@ -100,6 +112,7 @@ export default function MatchPredictionCard({
     try {
       await onSave(v)
       setSaved(true)
+      setLastSavedSnapshot({ ...v })
       // Reset terug naar "Opslaan" na 2s — duidelijker bij volgende wijziging
       setTimeout(() => setSaved(false), 2000)
     } catch {
@@ -316,9 +329,21 @@ export default function MatchPredictionCard({
           )}
 
           <div className="px-3 py-2.5">
-            <button onClick={handleSave} disabled={saving}
-              className="btn-primary w-full py-2.5 text-sm disabled:opacity-50">
-              {saving ? 'Opslaan...' : saved ? '✓ Bijgewerkt' : hasExisting ? 'Opslaan' : 'Opslaan'}
+            <button onClick={handleSave} disabled={saving || (!hasUnsavedChanges && !saved)}
+              className={`w-full py-2.5 text-sm font-semibold rounded-xl border-0 cursor-pointer transition-colors disabled:opacity-50 ${
+                saved
+                  ? 'bg-green-500 text-white'
+                  : hasUnsavedChanges
+                    ? 'bg-[#1a5c38] text-white hover:bg-[#154a2d]'
+                    : 'bg-[#e5e1d8] text-[#888] cursor-not-allowed'
+              }`}>
+              {saving
+                ? 'Opslaan...'
+                : saved
+                  ? '✓ Bijgewerkt'
+                  : hasUnsavedChanges
+                    ? (hasExisting ? '● Wijzigingen opslaan' : 'Opslaan')
+                    : (hasExisting ? '✓ Opgeslagen' : 'Opslaan')}
             </button>
           </div>
         </div>
