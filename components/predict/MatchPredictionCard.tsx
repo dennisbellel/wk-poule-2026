@@ -265,40 +265,44 @@ export default function MatchPredictionCard({
         </div>
       )}
 
-      {/* Open: invulformulier */}
+      {/* Open: invulformulier — zelfde grid als breakdown zodat inputs gecentreerd zijn */}
       {isOpen && (
         <div className="bg-white">
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
-            <span className="text-xs text-[#888] w-28 flex-shrink-0">Eindstand</span>
-            <div className="flex items-center gap-1 flex-1 justify-center">
+          <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
+            <span className="text-xs text-[#888]">Eindstand</span>
+            <div className="flex items-center justify-center gap-1">
               <ScoreInput value={v.home_ft} onChange={val => set('home_ft', val)} />
               <span className="text-xs text-[#ccc] px-0.5">–</span>
               <ScoreInput value={v.away_ft} onChange={val => set('away_ft', val)} />
             </div>
+            <span />
           </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
-            <span className="text-xs text-[#888] w-28 flex-shrink-0">Ruststand</span>
-            <div className="flex items-center gap-1 flex-1 justify-center">
+          <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
+            <span className="text-xs text-[#888]">Ruststand</span>
+            <div className="flex items-center justify-center gap-1">
               <ScoreInput value={v.home_ht} onChange={val => set('home_ht', val)} />
               <span className="text-xs text-[#ccc] px-0.5">–</span>
               <ScoreInput value={v.away_ht} onChange={val => set('away_ht', val)} />
             </div>
+            <span />
           </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
-            <span className="flex items-center gap-1.5 text-xs text-[#888] w-28 flex-shrink-0"><YellowCard />Geel</span>
-            <div className="flex items-center gap-1 flex-1 justify-center">
+          <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
+            <span className="flex items-center gap-1.5 text-xs text-[#888]"><YellowCard />Geel</span>
+            <div className="flex items-center justify-center gap-1">
               <ScoreInput value={v.home_yellow} onChange={val => set('home_yellow', val)} />
               <span className="text-xs text-[#ccc] px-0.5">–</span>
               <ScoreInput value={v.away_yellow} onChange={val => set('away_yellow', val)} />
             </div>
+            <span />
           </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
-            <span className="flex items-center gap-1.5 text-xs text-[#888] w-28 flex-shrink-0"><RedCard />Rood</span>
-            <div className="flex items-center gap-1 flex-1 justify-center">
+          <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
+            <span className="flex items-center gap-1.5 text-xs text-[#888]"><RedCard />Rood</span>
+            <div className="flex items-center justify-center gap-1">
               <ScoreInput value={v.home_red} onChange={val => set('home_red', val)} />
               <span className="text-xs text-[#ccc] px-0.5">–</span>
               <ScoreInput value={v.away_red} onChange={val => set('away_red', val)} />
             </div>
+            <span />
           </div>
 
           {/* Knockout extras */}

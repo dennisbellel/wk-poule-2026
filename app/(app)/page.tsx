@@ -3,8 +3,9 @@ import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { sortLeaderboard } from '@/lib/points/calculate'
-import { formatDateTimeNL, formatDateShortNL, formatTimeNL, isDeadlineUrgent } from '@/lib/format'
+import { formatDateTimeNL, isDeadlineUrgent } from '@/lib/format'
 import FeedReactions from '@/components/home/FeedReactions'
+import DeadlineCountdown from '@/components/home/DeadlineCountdown'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,15 +22,41 @@ export default async function DashboardPage() {
   const leaderboard = sortLeaderboard(lbRaw || [])
   const myEntry = leaderboard.find(e => e.user_id === user!.id)
 
-  // Wedstrijden binnen 24u — voor het 'Komende 24 uur' panel
-  const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000)
-  const { data: matchesNext24h } = await supabase
-    .from('matches')
-    .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
-    .eq('status', 'scheduled')
-    .gte('scheduled_at', new Date().toISOString())
-    .lte('scheduled_at', in24h.toISOString())
-    .order('scheduled_at', { ascending: true })
+  // Eerstvolgende deadline (wedstrijd of bonusvraag) voor de countdown bovenin
+  const nowIso = new Date().toISOString()
+  const [{ data: nextMatchForCountdown }, { data: nextBonusForCountdown }] = await Promise.all([
+    supabase.from('matches')
+      .select('id, prediction_deadline_at, home_team:home_team_id(name_nl), away_team:away_team_id(name_nl), home_team_placeholder, away_team_placeholder')
+      .eq('status', 'scheduled')
+      .gt('prediction_deadline_at', nowIso)
+      .order('prediction_deadline_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from('bonus_questions')
+      .select('id, question_nl, deadline_at, icon')
+      .eq('active', true)
+      .gt('deadline_at', nowIso)
+      .order('deadline_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  let countdownLabel: string | null = null
+  let countdownDeadline: string | null = null
+  const matchDeadline = nextMatchForCountdown?.prediction_deadline_at
+  const bonusDeadline = nextBonusForCountdown?.deadline_at
+  if (matchDeadline && (!bonusDeadline || new Date(matchDeadline) <= new Date(bonusDeadline))) {
+    const m = nextMatchForCountdown
+    const home = Array.isArray(m?.home_team) ? m.home_team[0] : m?.home_team
+    const away = Array.isArray(m?.away_team) ? m.away_team[0] : m?.away_team
+    const homeName = (home as { name_nl?: string } | null)?.name_nl ?? m?.home_team_placeholder ?? '?'
+    const awayName = (away as { name_nl?: string } | null)?.name_nl ?? m?.away_team_placeholder ?? '?'
+    countdownLabel = `${homeName} - ${awayName}`
+    countdownDeadline = matchDeadline
+  } else if (bonusDeadline) {
+    countdownLabel = `${nextBonusForCountdown?.icon ?? '🎯'} ${nextBonusForCountdown?.question_nl}`
+    countdownDeadline = bonusDeadline
+  }
 
   const { count: predCount } = await supabase
     .from('match_predictions')
@@ -113,6 +140,31 @@ export default async function DashboardPage() {
   }
 
   const correctPct = totalInputs > 0 ? Math.round((correctInputs / totalInputs) * 100) : 0
+
+  // Rivaliteit: persoon één plek boven jou (of onder als je #1 bent)
+  type Rival = { display_name: string; rank: number; total_points: number; pointsDiff: number; direction: 'above' | 'below' }
+  let rival: Rival | null = null
+  if (myEntry && leaderboard.length > 1) {
+    if (myEntry.rank > 1) {
+      const above = leaderboard.find(e => e.rank === myEntry.rank - 1)
+      if (above) rival = {
+        display_name: above.display_name,
+        rank: above.rank,
+        total_points: above.total_points,
+        pointsDiff: above.total_points - myEntry.total_points,
+        direction: 'above',
+      }
+    } else {
+      const below = leaderboard.find(e => e.rank === 2)
+      if (below) rival = {
+        display_name: below.display_name,
+        rank: below.rank,
+        total_points: below.total_points,
+        pointsDiff: myEntry.total_points - below.total_points,
+        direction: 'below',
+      }
+    }
+  }
 
   // Reactions voor feed-items
   const { data: reactionsData } = await supabase
@@ -303,6 +355,11 @@ export default async function DashboardPage() {
       </div>
 
       <div className="p-4 lg:p-8 space-y-5">
+        {/* Sectie 1: Live countdown bovenaan */}
+        {countdownLabel && countdownDeadline && (
+          <DeadlineCountdown label={countdownLabel} deadline={countdownDeadline} />
+        )}
+
         {/* Desktop stat cards (mobile staan ze in de hero) */}
         <div className="hidden lg:grid grid-cols-3 gap-4">
           {[
@@ -394,102 +451,119 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Sectie 3: Feed (volledige breedte) — bijzondere scores per recente wedstrijd, met emoji-reacties */}
-        {feedItems.length > 0 && (
-          <div className="card">
-            <div className="px-4 py-3 border-b border-[#f6f4ef]">
-              <span className="text-sm font-semibold">Recente wedstrijden</span>
-            </div>
-            {feedItems.map(item => (
-              <div key={item.matchId} className="px-4 py-3 border-b border-[#f6f4ef] last:border-0">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-sm font-medium flex-1 truncate">
-                    {item.homeFlag} {item.homeName}
-                  </span>
-                  <span className="heading text-base font-extrabold text-[#1a5c38] px-2">
-                    {item.homeFt}–{item.awayFt}
-                  </span>
-                  <span className="text-sm font-medium flex-1 truncate text-right">
-                    {item.awayName} {item.awayFlag}
-                  </span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-base">{item.headlineEmoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-700">{item.headline}</p>
-                    {item.sub && <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>}
-                  </div>
-                </div>
-                <FeedReactions matchId={item.matchId} reactions={reactionsData || []} currentUserId={user!.id} />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Sectie 4: Komende 24u + Voortgang naast elkaar */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Komende 24 uur */}
-          {matchesNext24h && matchesNext24h.length > 0 ? (
+        {/* Sectie 3: Feed (links) | Rivaliteit + Voortgang (rechts gestapeld) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+          {/* Feed met bijzondere scores */}
+          {feedItems.length > 0 ? (
             <div className="card">
-              <div className="px-4 py-3 border-b border-[#f6f4ef] flex justify-between items-center">
-                <span className="text-sm font-semibold">Komende 24 uur</span>
-                <span className="tag bg-amber-50 text-amber-700">{matchesNext24h.length} {matchesNext24h.length === 1 ? 'wedstrijd' : 'wedstrijden'}</span>
+              <div className="px-4 py-3 border-b border-[#f6f4ef]">
+                <span className="text-sm font-semibold">Recente wedstrijden</span>
               </div>
-              {matchesNext24h.map(m => {
-                const hasPred = predictedMatchIds.has(m.id)
-                return (
-                  <Link key={m.id} href="/predict" className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 hover:bg-[#fafaf9] transition-colors">
-                    <div className="flex flex-col items-center w-12 flex-shrink-0">
-                      <span className="text-[10px] text-[#aaa]">{formatDateShortNL(m.scheduled_at)}</span>
-                      <span className="text-sm font-semibold">{formatTimeNL(m.scheduled_at)}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">
-                        {m.home_team?.flag} {m.home_team?.name_nl ?? m.home_team_placeholder ?? '?'} — {m.away_team?.name_nl ?? m.away_team_placeholder ?? '?'} {m.away_team?.flag}
-                      </p>
-                      <p className="text-[11px] text-[#aaa] mt-0.5">
-                        {m.group_id ? `Groep ${m.group_id}` : (m.phase || '').toUpperCase()}
-                      </p>
-                    </div>
-                    <span className={`tag flex-shrink-0 ${hasPred ? 'bg-[#eaf4ef] text-[#1a5c38]' : 'bg-amber-50 text-amber-700'}`}>
-                      {hasPred ? '✓ Klaar' : 'Voorspel'}
+              {feedItems.map(item => (
+                <div key={item.matchId} className="px-4 py-3 border-b border-[#f6f4ef] last:border-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-sm font-medium flex-1 truncate">
+                      {item.homeFlag} {item.homeName}
                     </span>
-                  </Link>
-                )
-              })}
+                    <span className="heading text-base font-extrabold text-[#1a5c38] px-2">
+                      {item.homeFt}–{item.awayFt}
+                    </span>
+                    <span className="text-sm font-medium flex-1 truncate text-right">
+                      {item.awayName} {item.awayFlag}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-base">{item.headlineEmoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-700">{item.headline}</p>
+                      {item.sub && <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>}
+                    </div>
+                  </div>
+                  <FeedReactions matchId={item.matchId} reactions={reactionsData || []} currentUserId={user!.id} />
+                </div>
+              ))}
             </div>
           ) : (
             <div className="card p-6 text-center text-sm text-[#aaa]">
-              Geen wedstrijden in de komende 24 uur
+              Nog geen gespeelde wedstrijden
             </div>
           )}
 
-          {/* Voortgang */}
-          <div className="card">
-            <div className="px-4 py-3 border-b border-[#f6f4ef]">
-              <span className="text-sm font-semibold">Voortgang voorspellingen</span>
-            </div>
-            {[
-              ['Wedstrijden', predCount ?? 0, totalGroupMatches ?? 48],
-              ['Poulestand (groepen af)', completedGroups, 12],
-              ['Bonusvragen', bonusCount ?? 0, totalBonus ?? 9],
-            ].map(([lbl, done, total]) => (
-              <div key={String(lbl)} className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0">
-                <span className="text-sm text-[#888] w-28 flex-shrink-0">{lbl}</span>
-                <div className="flex-1 h-1.5 bg-[#f0ede6] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${total ? (Number(done) / Number(total)) * 100 : 0}%`,
-                      background: done === total ? '#16a34a' : '#1a5c38',
-                    }}
-                  />
+          {/* Rivaliteit + Voortgang gestapeld */}
+          <div className="space-y-5">
+            {/* Rivaliteit */}
+            {rival && myEntry && (
+              <div className="card overflow-hidden">
+                <div className="px-4 py-3 border-b border-[#f6f4ef]">
+                  <span className="text-sm font-semibold">
+                    {rival.direction === 'above' ? '🎯 In jouw vizier' : '👀 Op jouw hielen'}
+                  </span>
                 </div>
-                <span className={`text-xs font-semibold w-10 text-right ${done === total ? 'text-green-600' : ''}`}>
-                  {done === total ? '✓' : `${done}/${total}`}
-                </span>
+                <div className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex items-center gap-2 flex-1">
+                      <div className="w-9 h-9 rounded-full bg-[#1a5c38] flex items-center justify-center flex-shrink-0">
+                        <span className="heading text-sm font-bold text-white">{myEntry.display_name[0]}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-[#aaa]">#{myEntry.rank}</p>
+                        <p className="text-sm font-semibold text-[#1a5c38] truncate">Jij</p>
+                      </div>
+                    </div>
+                    <div className="text-center px-3">
+                      <p className="text-[10px] uppercase tracking-wide text-[#aaa]">verschil</p>
+                      <p className="heading text-xl font-extrabold text-gray-900">{rival.pointsDiff} pt</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-1 justify-end">
+                      <div className="min-w-0 text-right">
+                        <p className="text-xs text-[#aaa]">#{rival.rank}</p>
+                        <p className="text-sm font-semibold truncate" title={rival.display_name}>{rival.display_name}</p>
+                      </div>
+                      <div className="w-9 h-9 rounded-full bg-[#e5e1d8] flex items-center justify-center flex-shrink-0">
+                        <span className="heading text-sm font-bold text-[#777]">{rival.display_name[0]}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[#888] text-center">
+                    {rival.direction === 'above'
+                      ? rival.pointsDiff <= 3
+                        ? `Nog ${rival.pointsDiff} ${rival.pointsDiff === 1 ? 'punt' : 'punten'} en je staat op ${rival.rank} 👀`
+                        : `${rival.pointsDiff} punten goedmaken voor plek ${rival.rank}. Komt goed.`
+                      : rival.pointsDiff <= 3
+                        ? `Nek-aan-nek — ${rival.display_name} zit ${rival.pointsDiff} ${rival.pointsDiff === 1 ? 'punt' : 'punten'} achter je 😅`
+                        : `${rival.display_name} zit ${rival.pointsDiff} punten achter je. Voorlopig veilig.`}
+                  </p>
+                </div>
               </div>
-            ))}
+            )}
+
+            {/* Voortgang */}
+            <div className="card">
+              <div className="px-4 py-3 border-b border-[#f6f4ef]">
+                <span className="text-sm font-semibold">Voortgang voorspellingen</span>
+              </div>
+              {[
+                ['Wedstrijden', predCount ?? 0, totalGroupMatches ?? 48],
+                ['Poulestand (groepen af)', completedGroups, 12],
+                ['Bonusvragen', bonusCount ?? 0, totalBonus ?? 9],
+              ].map(([lbl, done, total]) => (
+                <div key={String(lbl)} className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0">
+                  <span className="text-sm text-[#888] w-28 flex-shrink-0">{lbl}</span>
+                  <div className="flex-1 h-1.5 bg-[#f0ede6] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${total ? (Number(done) / Number(total)) * 100 : 0}%`,
+                        background: done === total ? '#16a34a' : '#1a5c38',
+                      }}
+                    />
+                  </div>
+                  <span className={`text-xs font-semibold w-10 text-right ${done === total ? 'text-green-600' : ''}`}>
+                    {done === total ? '✓' : `${done}/${total}`}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
