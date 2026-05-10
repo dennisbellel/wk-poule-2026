@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -9,6 +9,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Toon foutmelding uit URL (?error=...) — bv. na callback fout vanuit invite/reset
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const err = url.searchParams.get('error')
+    if (err) {
+      setError(err === 'missing_token'
+        ? 'De link is ongeldig of verlopen. Vraag een nieuwe uitnodiging aan.'
+        : `Inloggen mislukt: ${err}`)
+      // Verwijder uit URL zodat hij niet bij refresh blijft hangen
+      url.searchParams.delete('error')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [])
 
   // Wachtwoord-reset modal
   const [showReset, setShowReset] = useState(false)
