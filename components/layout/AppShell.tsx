@@ -2,9 +2,10 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import type { Profile, BonusQuestion } from '@/types'
+import type { Profile, BonusQuestion, ScoringKeys } from '@/types'
 import WizardModal from '@/components/predict/WizardModal'
 import BonusQuestionItem from '@/components/predict/BonusQuestionItem'
+import OnboardingTour from '@/components/onboarding/OnboardingTour'
 import { createClient } from '@/lib/supabase/client'
 import { formatDateTimeNL } from '@/lib/format'
 
@@ -16,11 +17,19 @@ const NAV_ITEMS = [
   { href: '/profile', icon: '👤', label: 'Profiel', mobileLabel: 'Profiel' },
 ]
 
-export default function AppShell({ profile, children }: { profile: Profile | null; children: React.ReactNode }) {
+export default function AppShell({
+  profile, scoring, children,
+}: {
+  profile: Profile | null
+  scoring: ScoringKeys
+  children: React.ReactNode
+}) {
   const pathname = usePathname()
   const supabase = createClient()
 
   const [showWizard, setShowWizard] = useState(false)
+  const [showTour, setShowTour] = useState(false)
+  const [tourStartsWizard, setTourStartsWizard] = useState(false)
   const [liveQuestion, setLiveQuestion] = useState<BonusQuestion | null>(null)
   const [liveAnswer, setLiveAnswer] = useState('')
   const [liveSaving, setLiveSaving] = useState(false)
@@ -29,6 +38,15 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
   useEffect(() => {
     async function checkNotifications() {
       if (!profile) return
+
+      // Eerst de onboarding tour als die nog nooit is afgerond
+      const onboardedAt = (profile as Profile & { onboarded_at?: string | null }).onboarded_at
+      if (!onboardedAt) {
+        // Aan einde van de tour starten we de wizard automatisch (eerste keer)
+        setTourStartsWizard(true)
+        setShowTour(true)
+        return
+      }
 
       const { count } = await supabase
         .from('bonus_answers')
@@ -66,6 +84,41 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
 
     checkNotifications()
   }, [profile])
+
+  // Luister naar custom 'open-help' event vanuit andere pagina's (bijv. profile)
+  useEffect(() => {
+    const handler = () => {
+      setTourStartsWizard(false)
+      setShowTour(true)
+    }
+    window.addEventListener('open-help', handler)
+    return () => window.removeEventListener('open-help', handler)
+  }, [])
+
+  async function markOnboarded() {
+    if (!profile) return
+    await supabase.from('profiles').update({ onboarded_at: new Date().toISOString() }).eq('id', profile.id)
+  }
+
+  async function handleTourClose() {
+    // Sla over of kruisje — markeer als onboarded zodat 'ie niet weer komt
+    await markOnboarded()
+    setShowTour(false)
+    setTourStartsWizard(false)
+  }
+
+  async function handleTourFinish() {
+    // 'Aan de slag' → markeer onboarded en start wizard (alleen first-time)
+    await markOnboarded()
+    setShowTour(false)
+    if (tourStartsWizard) setShowWizard(true)
+    setTourStartsWizard(false)
+  }
+
+  function openHelp() {
+    setTourStartsWizard(false)  // bij handmatig openen geen wizard erna
+    setShowTour(true)
+  }
 
   async function submitLiveAnswer() {
     if (!profile || !liveQuestion || !liveAnswer) return
@@ -108,6 +161,16 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
             )
           })}
         </nav>
+        {/* Help-knop boven het profielblok */}
+        <div className="px-3 pb-2">
+          <button
+            onClick={openHelp}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-[#f6f4ef] transition-colors cursor-pointer border-0 bg-transparent"
+          >
+            <span className="text-base w-5 text-center">❓</span>
+            Help
+          </button>
+        </div>
         {profile && (
           <div className="p-4 border-t border-[#e5e1d8] flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-[#1a5c38] flex items-center justify-center flex-shrink-0">
@@ -144,6 +207,16 @@ export default function AppShell({ profile, children }: { profile: Profile | nul
           )
         })}
       </nav>
+
+      {/* Onboarding tour */}
+      {showTour && profile && (
+        <OnboardingTour
+          displayName={profile.display_name}
+          scoring={scoring}
+          onClose={handleTourClose}
+          onFinish={handleTourFinish}
+        />
+      )}
 
       {/* Wizard modal */}
       {showWizard && <WizardModal onClose={() => setShowWizard(false)} />}
