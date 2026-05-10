@@ -72,10 +72,7 @@ export default function AppShell({
 
   // Luister naar custom 'open-help' event vanuit andere pagina's (bijv. profile)
   useEffect(() => {
-    const handler = () => {
-      setTourStartsWizard(false)
-      setShowTour(true)
-    }
+    const handler = () => setShowTour(true)
     window.addEventListener('open-help', handler)
     return () => window.removeEventListener('open-help', handler)
   }, [])
