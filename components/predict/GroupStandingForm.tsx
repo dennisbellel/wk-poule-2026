@@ -114,16 +114,16 @@ export default function GroupStandingForm({
       {/* Stats */}
       <div className="card p-4">
         <p className="text-sm font-semibold text-gray-700 mb-3">Statistieken voorspellen</p>
-        <div className="flex gap-2 mb-2 pl-24">
+        <div className="flex gap-1.5 mb-2 pl-24">
           {STATS.map(s => (
-            <span key={s.key} className="text-[10px] text-[#aaa] text-center" style={{ width: 36 }}>{s.label}</span>
+            <span key={s.key} className="text-[10px] text-[#aaa] text-center flex-1 min-w-[44px]">{s.label}</span>
           ))}
         </div>
         {order.map(teamId => {
           const team = teams.find(t => t.id === teamId)
           if (!team) return null
           return (
-            <div key={teamId} className="flex items-center gap-2 mb-2.5">
+            <div key={teamId} className="flex items-center gap-1.5 mb-2.5">
               <span className="text-sm w-24 flex-shrink-0 truncate">{team.flag} {team.name_nl.split(' ')[0]}</span>
               {STATS.map(s => (
                 <input
@@ -131,8 +131,7 @@ export default function GroupStandingForm({
                   type="number" min="0" max={s.max}
                   value={stats[teamId]?.[s.key] ?? 0}
                   onChange={e => setStat(teamId, s.key, parseInt(e.target.value) || 0)}
-                  className="input-score text-sm font-bold"
-                  style={{ width: 36, height: 32 }}
+                  className="input-score text-sm font-bold flex-1 min-w-[44px] h-11"
                 />
               ))}
             </div>

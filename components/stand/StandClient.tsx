@@ -11,12 +11,12 @@ type EntryWithDelta = LeaderboardEntry & {
 }
 
 function RankDelta({ delta }: { delta: number | null }) {
-  if (delta === null) return <span className="text-[10px] text-[#ccc]">nieuw</span>
-  if (delta === 0) return <span className="text-[10px] text-[#bbb]">–</span>
+  if (delta === null) return <span title="Nieuw — geen vorige positie bekend" className="text-[10px] text-[#ccc]">nieuw</span>
+  if (delta === 0) return <span title="Geen verandering" className="text-[10px] text-[#bbb]">–</span>
   if (delta > 0) {
-    return <span className="text-[10px] font-bold text-green-600">▲ {delta}</span>
+    return <span title={`${delta} plek${delta > 1 ? 'ken' : ''} gestegen`} className="text-[10px] font-bold text-green-600">▲ {delta}</span>
   }
-  return <span className="text-[10px] font-bold text-red-500">▼ {Math.abs(delta)}</span>
+  return <span title={`${Math.abs(delta)} plek${Math.abs(delta) > 1 ? 'ken' : ''} gezakt`} className="text-[10px] font-bold text-red-500">▼ {Math.abs(delta)}</span>
 }
 
 export default function StandClient({
@@ -71,10 +71,10 @@ export default function StandClient({
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`text-sm ${p.user_id === currentUserId ? 'font-semibold text-[#1a5c38]' : 'font-medium'}`}>
+                <p title={p.display_name} className={`text-sm truncate ${p.user_id === currentUserId ? 'font-semibold text-[#1a5c38]' : 'font-medium'}`}>
                   {p.display_name}{p.user_id === currentUserId ? ' (jij)' : ''}
                 </p>
-                <p className="text-[11px] text-[#aaa] mt-0.5">
+                <p title={`${p.correctCount} van ${p.correctTotal} mogelijke inputs goed`} className="text-[11px] text-[#aaa] mt-0.5">
                   {p.correctPct}% goed · {p.correctCount}/{p.correctTotal}
                 </p>
               </div>

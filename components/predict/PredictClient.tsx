@@ -181,17 +181,27 @@ export default function PredictClient({
             {groupTab === 1 && (
               <div>
                 <div className="flex gap-1.5 flex-wrap mb-4">
-                  {GROUPS.map(g => (
-                    <button
-                      key={g}
-                      onClick={() => setActiveGroup(g)}
-                      className={`w-9 h-9 rounded-lg text-sm font-semibold border-0 cursor-pointer transition-colors ${
-                        activeGroup === g ? 'bg-[#1a5c38] text-white' : 'bg-white border border-[#e5e1d8] text-[#777]'
-                      }`}
-                    >
-                      {g}
-                    </button>
-                  ))}
+                  {GROUPS.map(g => {
+                    const groupPredCount = groupPredictions.filter(p => p.group_id === g).length
+                    const isComplete = groupPredCount === 4
+                    return (
+                      <button
+                        key={g}
+                        onClick={() => setActiveGroup(g)}
+                        title={isComplete ? `Groep ${g} — compleet` : `Groep ${g} — ${groupPredCount}/4 ingevuld`}
+                        className={`relative w-10 h-10 rounded-lg text-sm font-semibold border-0 cursor-pointer transition-colors ${
+                          activeGroup === g ? 'bg-[#1a5c38] text-white' : 'bg-white border border-[#e5e1d8] text-[#777]'
+                        }`}
+                      >
+                        {g}
+                        {isComplete && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-500 text-white text-[8px] flex items-center justify-center font-bold border border-white">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
                 <GroupStandingForm
                   groupId={activeGroup}

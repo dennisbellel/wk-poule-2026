@@ -7,6 +7,7 @@ function RegisterForm() {
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [email, setEmail] = useState('')
@@ -91,22 +92,33 @@ function RegisterForm() {
           <label className="block text-xs font-semibold text-[#888] mb-1.5 uppercase tracking-wide">
             Wachtwoord kiezen
           </label>
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            minLength={8}
-            placeholder="Minimaal 8 tekens"
-            className="w-full border border-[#e5e1d8] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#1a5c38] bg-[#f6f4ef]"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              minLength={8}
+              placeholder="••••••••"
+              className="w-full border border-[#e5e1d8] rounded-xl px-4 py-3 pr-11 text-sm outline-none focus:border-[#1a5c38] bg-[#f6f4ef]"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(s => !s)}
+              aria-label={showPassword ? 'Verberg wachtwoord' : 'Toon wachtwoord'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#888] cursor-pointer border-0 bg-transparent text-base"
+            >
+              {showPassword ? '🙈' : '👁'}
+            </button>
+          </div>
+          <p className="text-[11px] text-[#aaa] mt-1.5">Minimaal 8 tekens.</p>
         </div>
         <div>
           <label className="block text-xs font-semibold text-[#888] mb-1.5 uppercase tracking-wide">
             Herhaal wachtwoord
           </label>
           <input
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             value={password2}
             onChange={e => setPassword2(e.target.value)}
             required

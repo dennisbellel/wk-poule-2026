@@ -76,7 +76,7 @@ function RankChart({ data, totalUsers }: { data: RankPoint[]; totalUsers: number
 }
 
 export default function StatsClient({
-  leaderboardSize, currentUserId, myRankHistory, accuracy, topScorers, climbers,
+  leaderboardSize, currentUserId, myRankHistory, accuracy, topScorers, climbers, fallers,
 }: {
   leaderboardSize: number
   currentUserId: string
@@ -84,6 +84,7 @@ export default function StatsClient({
   accuracy: AccuracyEntry[]
   topScorers: TopScorerEntry[]
   climbers: ClimberEntry[]
+  fallers: ClimberEntry[]
 }) {
   return (
     <div>
@@ -143,23 +144,43 @@ export default function StatsClient({
             )}
           </div>
 
-          {/* Klimmer */}
-          <div className="card overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#f6f4ef]">
-              <h2 className="text-sm font-semibold text-gray-700">Grootste klimmers</h2>
-              <p className="text-[11px] text-[#aaa] mt-0.5">Sprong omhoog sinds de vorige publicatie</p>
+          {/* Klimmers + Dalers naast elkaar op desktop */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="card overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#f6f4ef]">
+                <h2 className="text-sm font-semibold text-gray-700">📈 Grootste klimmers</h2>
+                <p className="text-[11px] text-[#aaa] mt-0.5">Sprong omhoog sinds de vorige publicatie</p>
+              </div>
+              {climbers.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-[#aaa]">Nog niemand is gestegen</div>
+              ) : (
+                climbers.map(c => (
+                  <div key={c.user_id} className={`flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 ${c.user_id === currentUserId ? 'bg-[#eaf4ef]' : ''}`}>
+                    <span className="w-5 text-xs font-bold text-[#ccc]">#{c.rank}</span>
+                    <span className={`flex-1 text-sm truncate ${c.user_id === currentUserId ? 'font-semibold text-[#1a5c38]' : ''}`} title={c.display_name}>{c.display_name}</span>
+                    <span className="heading text-base font-bold text-green-600">▲ {c.delta}</span>
+                  </div>
+                ))
+              )}
             </div>
-            {climbers.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-[#aaa]">Nog niemand is gestegen</div>
-            ) : (
-              climbers.map(c => (
-                <div key={c.user_id} className={`flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 ${c.user_id === currentUserId ? 'bg-[#eaf4ef]' : ''}`}>
-                  <span className="w-5 text-xs font-bold text-[#ccc]">#{c.rank}</span>
-                  <span className={`flex-1 text-sm ${c.user_id === currentUserId ? 'font-semibold text-[#1a5c38]' : ''}`}>{c.display_name}</span>
-                  <span className="heading text-base font-bold text-green-600">▲ {c.delta}</span>
-                </div>
-              ))
-            )}
+
+            <div className="card overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#f6f4ef]">
+                <h2 className="text-sm font-semibold text-gray-700">📉 Grootste dalers</h2>
+                <p className="text-[11px] text-[#aaa] mt-0.5">Plekken verloren sinds de vorige publicatie</p>
+              </div>
+              {fallers.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-[#aaa]">Nog niemand is gezakt</div>
+              ) : (
+                fallers.map(c => (
+                  <div key={c.user_id} className={`flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 ${c.user_id === currentUserId ? 'bg-[#eaf4ef]' : ''}`}>
+                    <span className="w-5 text-xs font-bold text-[#ccc]">#{c.rank}</span>
+                    <span className={`flex-1 text-sm truncate ${c.user_id === currentUserId ? 'font-semibold text-[#1a5c38]' : ''}`} title={c.display_name}>{c.display_name}</span>
+                    <span className="heading text-base font-bold text-red-500">▼ {Math.abs(c.delta ?? 0)}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>

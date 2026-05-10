@@ -87,13 +87,17 @@ export default async function StatsPage() {
     .from('profiles')
     .select('id, previous_rank')
 
-  const climbers = leaderboard.map(e => {
+  const movers = leaderboard.map(e => {
     const prof = (profilesWithPrev || []).find(p => p.id === e.user_id) as { id: string; previous_rank?: number | null } | undefined
     const prev = prof?.previous_rank ?? null
     const delta = prev != null ? prev - e.rank : null
     return { user_id: e.user_id, display_name: e.display_name, rank: e.rank, delta }
-  }).filter(c => c.delta != null && c.delta > 0)
+  })
+  const climbers = movers.filter(c => c.delta != null && c.delta > 0)
     .sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0))
+    .slice(0, 5)
+  const fallers = movers.filter(c => c.delta != null && c.delta < 0)
+    .sort((a, b) => (a.delta ?? 0) - (b.delta ?? 0))
     .slice(0, 5)
 
   return (
@@ -104,6 +108,7 @@ export default async function StatsPage() {
       accuracy={accuracy.slice(0, 8)}
       topScorers={topScorerRanking}
       climbers={climbers}
+      fallers={fallers}
     />
   )
 }
