@@ -1,11 +1,89 @@
 'use client'
-import type { LeaderboardEntry } from '@/types'
+
+type RankPoint = { rank: number; at: string }
+type AccuracyEntry = { user_id: string; display_name: string; exact: number; predicted: number; pct: number }
+type TopScorerEntry = { user_id: string; display_name: string; count: number }
+type ClimberEntry = { user_id: string; display_name: string; rank: number; delta: number | null }
+
+function RankChart({ data, totalUsers }: { data: RankPoint[]; totalUsers: number }) {
+  if (data.length === 0) {
+    return (
+      <div className="text-center py-10 text-[#aaa] text-sm">
+        Nog geen geschiedenis — verschijnt zodra er uitslagen gepubliceerd zijn.
+      </div>
+    )
+  }
+
+  const W = 600
+  const H = 200
+  const padX = 30
+  const padY = 20
+  const innerW = W - padX * 2
+  const innerH = H - padY * 2
+
+  // X-as: tijd. Y-as: rank (lager = beter, dus 1 bovenaan)
+  const minTime = new Date(data[0].at).getTime()
+  const maxTime = new Date(data[data.length - 1].at).getTime()
+  const timeRange = Math.max(maxTime - minTime, 1)
+  const maxRank = Math.max(totalUsers, ...data.map(d => d.rank))
+
+  const points = data.map(d => {
+    const t = new Date(d.at).getTime()
+    const x = padX + ((t - minTime) / timeRange) * innerW
+    const y = padY + ((d.rank - 1) / Math.max(maxRank - 1, 1)) * innerH
+    return { x, y, ...d }
+  })
+
+  // Single point edge case
+  if (points.length === 1) {
+    points[0].x = padX + innerW / 2
+  }
+
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+
+  // Y-as labels: 1, midden, totaal
+  const yTicks = [1, Math.ceil(maxRank / 2), maxRank]
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 320 }}>
+        {/* Y-as gridlines */}
+        {yTicks.map(t => {
+          const y = padY + ((t - 1) / Math.max(maxRank - 1, 1)) * innerH
+          return (
+            <g key={t}>
+              <line x1={padX} y1={y} x2={W - padX} y2={y} stroke="#f0ede6" strokeWidth="1" />
+              <text x={padX - 6} y={y + 3} fontSize="9" fill="#aaa" textAnchor="end">#{t}</text>
+            </g>
+          )
+        })}
+        {/* Lijn */}
+        <path d={pathD} fill="none" stroke="#1a5c38" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {/* Punten */}
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="3" fill="#1a5c38" />
+        ))}
+        {/* X-as labels: eerste en laatste datum */}
+        <text x={padX} y={H - 4} fontSize="9" fill="#aaa">
+          {new Date(data[0].at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+        </text>
+        <text x={W - padX} y={H - 4} fontSize="9" fill="#aaa" textAnchor="end">
+          {new Date(data[data.length - 1].at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
+        </text>
+      </svg>
+    </div>
+  )
+}
 
 export default function StatsClient({
-  leaderboard, currentUserId,
+  leaderboardSize, currentUserId, myRankHistory, accuracy, topScorers, climbers,
 }: {
-  leaderboard: (LeaderboardEntry & { rank: number })[]
+  leaderboardSize: number
   currentUserId: string
+  myRankHistory: RankPoint[]
+  accuracy: AccuracyEntry[]
+  topScorers: TopScorerEntry[]
+  climbers: ClimberEntry[]
 }) {
   return (
     <div>
@@ -17,62 +95,71 @@ export default function StatsClient({
       </div>
 
       <div className="p-4 lg:p-8">
-        <div className="max-w-2xl mx-auto space-y-5">
+        <div className="max-w-3xl mx-auto space-y-5">
+
+          {/* Lijngrafiek: jouw positie over tijd */}
           <div className="card p-4 lg:p-5">
-            <h2 className="text-sm font-semibold text-gray-700 mb-1">Punten per categorie</h2>
-            <p className="text-xs text-[#aaa] mb-4">Hoe zijn de punten verdeeld per deelnemer?</p>
-            <div className="space-y-2">
-              {leaderboard.map(p => (
-                <div key={p.user_id} className="flex items-center gap-3">
-                  <span className={`text-xs w-24 flex-shrink-0 truncate ${p.user_id === currentUserId ? 'font-semibold text-[#1a5c38]' : 'text-[#888]'}`}>
-                    {p.display_name}
-                  </span>
-                  <div className="flex-1 flex gap-1">
-                    {[
-                      { val: p.match_points, color: '#1a5c38' },
-                      { val: p.group_points, color: '#3b82f6' },
-                      { val: p.bonus_points, color: '#c9930a' },
-                    ].map(({ val, color }, i) => (
-                      <div key={i} title={`${val} pt`}
-                        style={{ flex: val || 0.5, height: 24, background: color, opacity: 0.7, borderRadius: 4, minWidth: val > 0 ? 4 : 0 }}
-                        className="flex items-center justify-center">
-                        {val > 8 && <span className="text-[9px] font-bold text-white">{val}</span>}
-                      </div>
-                    ))}
-                  </div>
-                  <span className="heading text-sm font-bold w-8 text-right">{p.total_points}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-4 mt-3">
-              {[['#1a5c38', 'Wedstrijden'], ['#3b82f6', 'Poulestand'], ['#c9930a', 'Bonus']].map(([color, lbl]) => (
-                <div key={lbl} className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm" style={{ background: color, opacity: 0.7 }} />
-                  <span className="text-xs text-[#888]">{lbl}</span>
-                </div>
-              ))}
-            </div>
+            <h2 className="text-sm font-semibold text-gray-700 mb-1">Mijn positie over tijd</h2>
+            <p className="text-xs text-[#aaa] mb-3">Hoe sta jij ervoor sinds de eerste publicatie?</p>
+            <RankChart data={myRankHistory} totalUsers={leaderboardSize} />
           </div>
 
+          {/* Trefzekerheid */}
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-[#f6f4ef]">
-              <h2 className="text-sm font-semibold text-gray-700">Top 3</h2>
+              <h2 className="text-sm font-semibold text-gray-700">Trefzekerheid</h2>
+              <p className="text-[11px] text-[#aaa] mt-0.5">% wedstrijden waarin je de exacte eindstand goed had</p>
             </div>
-            {leaderboard.slice(0, 3).map(p => (
-              <div key={p.user_id} className={`flex items-center gap-3 px-4 py-4 border-b border-[#f6f4ef] last:border-0 ${p.user_id === currentUserId ? 'bg-[#eaf4ef]' : ''}`}>
-                <span className="text-2xl w-8 text-center">
-                  {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : '🥉'}
-                </span>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${p.user_id === currentUserId ? 'bg-[#1a5c38]' : 'bg-[#e5e1d8]'}`}>
-                  <span className={`heading font-bold ${p.user_id === currentUserId ? 'text-white' : 'text-[#777]'}`}>{p.display_name[0]}</span>
+            {accuracy.length === 0 || accuracy.every(a => a.predicted === 0) ? (
+              <div className="px-4 py-8 text-center text-sm text-[#aaa]">Nog geen voorspellingen om te beoordelen</div>
+            ) : (
+              accuracy.map((a, i) => (
+                <div key={a.user_id} className={`flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 ${a.user_id === currentUserId ? 'bg-[#eaf4ef]' : ''}`}>
+                  <span className="w-5 text-xs font-bold text-[#ccc]">{i + 1}</span>
+                  <span className={`flex-1 text-sm ${a.user_id === currentUserId ? 'font-semibold text-[#1a5c38]' : ''}`}>{a.display_name}</span>
+                  <span className="text-xs text-[#aaa]">{a.exact}/{a.predicted}</span>
+                  <span className="heading text-base font-bold text-[#1a5c38] w-12 text-right">{a.pct}%</span>
                 </div>
-                <div className="flex-1">
-                  <p className={`text-sm font-semibold ${p.user_id === currentUserId ? 'text-[#1a5c38]' : ''}`}>{p.display_name}</p>
-                  <p className="text-xs text-[#aaa]">{p.match_points} wed. · {p.group_points} poule · {p.bonus_points} bonus</p>
+              ))
+            )}
+          </div>
+
+          {/* Topscoorder per wedstrijd */}
+          <div className="card overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#f6f4ef]">
+              <h2 className="text-sm font-semibold text-gray-700">Topscoorder per wedstrijd</h2>
+              <p className="text-[11px] text-[#aaa] mt-0.5">Hoe vaak heb je de hoogste score in één wedstrijd gehaald?</p>
+            </div>
+            {topScorers.length === 0 || topScorers.every(t => t.count === 0) ? (
+              <div className="px-4 py-8 text-center text-sm text-[#aaa]">Nog geen gepubliceerde wedstrijden</div>
+            ) : (
+              topScorers.filter(t => t.count > 0).map((t, i) => (
+                <div key={t.user_id} className={`flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 ${t.user_id === currentUserId ? 'bg-[#eaf4ef]' : ''}`}>
+                  <span className="w-5 text-xs font-bold text-[#ccc]">{i + 1}</span>
+                  <span className={`flex-1 text-sm ${t.user_id === currentUserId ? 'font-semibold text-[#1a5c38]' : ''}`}>{t.display_name}</span>
+                  <span className="heading text-base font-bold w-16 text-right">{t.count}× 🏆</span>
                 </div>
-                <span className="heading text-2xl font-extrabold">{p.total_points}</span>
-              </div>
-            ))}
+              ))
+            )}
+          </div>
+
+          {/* Klimmer */}
+          <div className="card overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#f6f4ef]">
+              <h2 className="text-sm font-semibold text-gray-700">Grootste klimmers</h2>
+              <p className="text-[11px] text-[#aaa] mt-0.5">Sprong omhoog sinds de vorige publicatie</p>
+            </div>
+            {climbers.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-[#aaa]">Nog niemand is gestegen</div>
+            ) : (
+              climbers.map(c => (
+                <div key={c.user_id} className={`flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 ${c.user_id === currentUserId ? 'bg-[#eaf4ef]' : ''}`}>
+                  <span className="w-5 text-xs font-bold text-[#ccc]">#{c.rank}</span>
+                  <span className={`flex-1 text-sm ${c.user_id === currentUserId ? 'font-semibold text-[#1a5c38]' : ''}`}>{c.display_name}</span>
+                  <span className="heading text-base font-bold text-green-600">▲ {c.delta}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

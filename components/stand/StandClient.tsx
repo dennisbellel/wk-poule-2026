@@ -5,6 +5,9 @@ type EntryWithDelta = LeaderboardEntry & {
   rank: number
   previous_rank: number | null
   delta: number | null
+  correctPct: number
+  correctTotal: number
+  correctCount: number
 }
 
 function RankDelta({ delta }: { delta: number | null }) {
@@ -42,9 +45,7 @@ export default function StandClient({
             </div>
             <div className="text-right">
               <p className="heading text-2xl font-extrabold text-white">{topEntry.total_points} pt</p>
-              <p className="text-xs text-white/60">
-                ⚽ {topEntry.match_points} · 📊 {topEntry.group_points} · 🎯 {topEntry.bonus_points}
-              </p>
+              <p className="text-xs text-white/60">{topEntry.correctPct}% goed</p>
             </div>
           </div>
         )}
@@ -74,7 +75,7 @@ export default function StandClient({
                   {p.display_name}{p.user_id === currentUserId ? ' (jij)' : ''}
                 </p>
                 <p className="text-[11px] text-[#aaa] mt-0.5">
-                  ⚽ {p.match_points} · 📊 {p.group_points} · 🎯 {p.bonus_points}
+                  {p.correctPct}% goed · {p.correctCount}/{p.correctTotal}
                 </p>
               </div>
               <span className="heading text-xl font-extrabold">{p.total_points}</span>
