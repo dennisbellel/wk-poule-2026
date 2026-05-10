@@ -120,5 +120,14 @@ export async function POST(request: Request) {
     // RPC bestaat misschien niet in alle omgevingen
   }
 
+  // Snapshot nieuwe ranks naar rank_history voor de lijngrafiek
+  const { data: lbAfter } = await admin.from('leaderboard').select('*')
+  if (lbAfter) {
+    const ranked = sortLeaderboard(lbAfter as LeaderboardEntry[])
+    await admin.from('rank_history').insert(
+      ranked.map(r => ({ user_id: r.user_id, rank: r.rank, total_points: r.total_points }))
+    )
+  }
+
   return NextResponse.json({ ok: true, recalculated })
 }

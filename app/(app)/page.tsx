@@ -4,6 +4,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { nl } from 'date-fns/locale'
 import { sortLeaderboard } from '@/lib/points/calculate'
 import { formatDateTimeNL, formatDateShortNL, formatTimeNL, isDeadlineUrgent } from '@/lib/format'
+import FeedReactions from '@/components/home/FeedReactions'
 
 export const dynamic = 'force-dynamic'
 
@@ -107,6 +108,11 @@ export default async function DashboardPage() {
   }
 
   const correctPct = totalInputs > 0 ? Math.round((correctInputs / totalInputs) * 100) : 0
+
+  // Reactions voor feed-items
+  const { data: reactionsData } = await supabase
+    .from('match_reactions')
+    .select('id, user_id, match_id, emoji')
 
   // Bijzondere scores feed: per recent gepubliceerde wedstrijd één statement
   const { data: recentFinished } = await supabase
@@ -303,136 +309,47 @@ export default async function DashboardPage() {
           ))}
         </div>
 
-        {/* Feed: bijzondere scores per recente wedstrijd */}
-        {feedItems.length > 0 && (
-          <div className="card">
-            <div className="px-4 py-3 border-b border-[#f6f4ef]">
-              <span className="text-sm font-semibold">Recente wedstrijden</span>
-            </div>
-            {feedItems.map(item => (
-              <div key={item.matchId} className="px-4 py-3 border-b border-[#f6f4ef] last:border-0">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-sm font-medium flex-1 truncate">
-                    {item.homeFlag} {item.homeName}
-                  </span>
-                  <span className="heading text-base font-extrabold text-[#1a5c38] px-2">
-                    {item.homeFt}–{item.awayFt}
-                  </span>
-                  <span className="text-sm font-medium flex-1 truncate text-right">
-                    {item.awayName} {item.awayFlag}
-                  </span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-base">{item.headlineEmoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-700">{item.headline}</p>
-                    {item.sub && <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
+        {/* Sectie 2: Deadlines + Tussenstand naast elkaar */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="space-y-4">
-
-            {/* Aankomende deadlines — alleen open items */}
-            {deadlineItems.length > 0 && (
-              <div className="card">
-                <div className="px-4 py-3 border-b border-[#f6f4ef] flex justify-between items-center">
-                  <span className="text-sm font-semibold">Aankomende deadlines</span>
-                  <span className="tag bg-amber-50 text-amber-700">{deadlineItems.length} open</span>
-                </div>
-                {deadlineItems.map(item => {
-                  const urgent = isUrgent(item.deadline)
-                  return (
-                    <Link
-                      key={item.id}
-                      href={item.kind === 'match' ? '/predict' : '/predict'}
-                      className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 hover:bg-[#fafaf9] transition-colors"
-                    >
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${urgent ? 'bg-red-400' : 'bg-amber-400'}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate text-gray-900">{item.label}</p>
-                        <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          urgent ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
-                        }`}>
-                          {formatDeadline(item.deadline)}
-                        </span>
-                        <p className="text-[10px] text-[#ccc] mt-0.5">
-                          {formatDistanceToNow(item.deadline, { locale: nl, addSuffix: true })}
-                        </p>
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Volgende wedstrijd */}
-            {nextMatch && (
-              <div className="card">
-                <div className="px-4 py-3 border-b border-[#f6f4ef] flex justify-between items-center">
-                  <span className="text-sm font-semibold">Volgende wedstrijd</span>
-                  <span className="tag bg-amber-50 text-amber-700">⚡ Voorspel</span>
-                </div>
-                <div className="p-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="tag bg-[#eaf4ef] text-[#1a5c38]">Groep {nextMatch.group_id}</span>
-                    <span className="text-xs text-[#aaa]">
-                      {formatDateShortNL(nextMatch.scheduled_at)} · {formatTimeNL(nextMatch.scheduled_at)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="flex-1 text-sm font-semibold">
-                      {nextMatch.home_team?.flag} {nextMatch.home_team?.name_nl}
-                    </span>
-                    <div className="bg-[#f6f4ef] px-3 py-1.5 rounded-lg">
-                      <span className="text-xs text-[#ccc]">vs</span>
-                    </div>
-                    <span className="flex-1 text-sm font-semibold text-right">
-                      {nextMatch.away_team?.name_nl} {nextMatch.away_team?.flag}
-                    </span>
-                  </div>
-                  <Link href="/predict" className="btn-primary block text-center w-full py-3">
-                    Voorspelling invullen →
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {/* Voortgang */}
+          {/* Aankomende deadlines */}
+          {deadlineItems.length > 0 ? (
             <div className="card">
-              <div className="px-4 py-3 border-b border-[#f6f4ef]">
-                <span className="text-sm font-semibold">Voortgang voorspellingen</span>
+              <div className="px-4 py-3 border-b border-[#f6f4ef] flex justify-between items-center">
+                <span className="text-sm font-semibold">Aankomende deadlines</span>
+                <span className="tag bg-amber-50 text-amber-700">{deadlineItems.length} open</span>
               </div>
-              {[
-                ['Wedstrijden', predCount ?? 0, totalGroupMatches ?? 48],
-                ['Poulestand', Math.floor((groupPredCount ?? 0) / 4), 12],
-                ['Bonusvragen', bonusCount ?? 0, totalBonus ?? 9],
-              ].map(([lbl, done, total]) => (
-                <div key={String(lbl)} className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0">
-                  <span className="text-sm text-[#888] w-28 flex-shrink-0">{lbl}</span>
-                  <div className="flex-1 h-1.5 bg-[#f0ede6] rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${total ? (Number(done) / Number(total)) * 100 : 0}%`,
-                        background: done === total ? '#16a34a' : '#1a5c38',
-                      }}
-                    />
-                  </div>
-                  <span className={`text-xs font-semibold w-10 text-right ${done === total ? 'text-green-600' : ''}`}>
-                    {done === total ? '✓' : `${done}/${total}`}
-                  </span>
-                </div>
-              ))}
+              {deadlineItems.map(item => {
+                const urgent = isUrgent(item.deadline)
+                return (
+                  <Link
+                    key={item.id}
+                    href="/predict"
+                    className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 hover:bg-[#fafaf9] transition-colors"
+                  >
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${urgent ? 'bg-red-400' : 'bg-amber-400'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate text-gray-900">{item.label}</p>
+                      <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        urgent ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {formatDeadline(item.deadline)}
+                      </span>
+                      <p className="text-[10px] text-[#ccc] mt-0.5">
+                        {formatDistanceToNow(item.deadline, { locale: nl, addSuffix: true })}
+                      </p>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
-          </div>
+          ) : (
+            <div className="card p-6 text-center text-sm text-[#aaa]">
+              Geen open deadlines de komende 7 dagen 🎉
+            </div>
+          )}
 
           {/* Tussenstand */}
           <div className="card">
@@ -466,6 +383,105 @@ export default async function DashboardPage() {
                 + {leaderboard.length - 8} meer deelnemers →
               </Link>
             )}
+          </div>
+        </div>
+
+        {/* Sectie 3: Feed (volledige breedte) — bijzondere scores per recente wedstrijd, met emoji-reacties */}
+        {feedItems.length > 0 && (
+          <div className="card">
+            <div className="px-4 py-3 border-b border-[#f6f4ef]">
+              <span className="text-sm font-semibold">Recente wedstrijden</span>
+            </div>
+            {feedItems.map(item => (
+              <div key={item.matchId} className="px-4 py-3 border-b border-[#f6f4ef] last:border-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-sm font-medium flex-1 truncate">
+                    {item.homeFlag} {item.homeName}
+                  </span>
+                  <span className="heading text-base font-extrabold text-[#1a5c38] px-2">
+                    {item.homeFt}–{item.awayFt}
+                  </span>
+                  <span className="text-sm font-medium flex-1 truncate text-right">
+                    {item.awayName} {item.awayFlag}
+                  </span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-base">{item.headlineEmoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-700">{item.headline}</p>
+                    {item.sub && <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>}
+                  </div>
+                </div>
+                <FeedReactions matchId={item.matchId} reactions={reactionsData || []} currentUserId={user!.id} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Sectie 4: Volgende wedstrijd + Voortgang naast elkaar */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Volgende wedstrijd */}
+          {nextMatch ? (
+            <div className="card">
+              <div className="px-4 py-3 border-b border-[#f6f4ef] flex justify-between items-center">
+                <span className="text-sm font-semibold">Volgende wedstrijd</span>
+                <span className="tag bg-amber-50 text-amber-700">⚡ Voorspel</span>
+              </div>
+              <div className="p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="tag bg-[#eaf4ef] text-[#1a5c38]">Groep {nextMatch.group_id}</span>
+                  <span className="text-xs text-[#aaa]">
+                    {formatDateShortNL(nextMatch.scheduled_at)} · {formatTimeNL(nextMatch.scheduled_at)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="flex-1 text-sm font-semibold">
+                    {nextMatch.home_team?.flag} {nextMatch.home_team?.name_nl}
+                  </span>
+                  <div className="bg-[#f6f4ef] px-3 py-1.5 rounded-lg">
+                    <span className="text-xs text-[#ccc]">vs</span>
+                  </div>
+                  <span className="flex-1 text-sm font-semibold text-right">
+                    {nextMatch.away_team?.name_nl} {nextMatch.away_team?.flag}
+                  </span>
+                </div>
+                <Link href="/predict" className="btn-primary block text-center w-full py-3">
+                  Voorspelling invullen →
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="card p-6 text-center text-sm text-[#aaa]">
+              Geen aankomende wedstrijden
+            </div>
+          )}
+
+          {/* Voortgang */}
+          <div className="card">
+            <div className="px-4 py-3 border-b border-[#f6f4ef]">
+              <span className="text-sm font-semibold">Voortgang voorspellingen</span>
+            </div>
+            {[
+              ['Wedstrijden', predCount ?? 0, totalGroupMatches ?? 48],
+              ['Poulestand', Math.floor((groupPredCount ?? 0) / 4), 12],
+              ['Bonusvragen', bonusCount ?? 0, totalBonus ?? 9],
+            ].map(([lbl, done, total]) => (
+              <div key={String(lbl)} className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0">
+                <span className="text-sm text-[#888] w-28 flex-shrink-0">{lbl}</span>
+                <div className="flex-1 h-1.5 bg-[#f0ede6] rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${total ? (Number(done) / Number(total)) * 100 : 0}%`,
+                      background: done === total ? '#16a34a' : '#1a5c38',
+                    }}
+                  />
+                </div>
+                <span className={`text-xs font-semibold w-10 text-right ${done === total ? 'text-green-600' : ''}`}>
+                  {done === total ? '✓' : `${done}/${total}`}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
