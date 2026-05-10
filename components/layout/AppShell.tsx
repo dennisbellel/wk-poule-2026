@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { Profile, BonusQuestion, ScoringKeys } from '@/types'
-import WizardModal from '@/components/predict/WizardModal'
 import BonusQuestionItem from '@/components/predict/BonusQuestionItem'
 import OnboardingTour from '@/components/onboarding/OnboardingTour'
 import { createClient } from '@/lib/supabase/client'
@@ -27,10 +26,7 @@ export default function AppShell({
   const pathname = usePathname()
   const supabase = createClient()
 
-  const [showWizard, setShowWizard] = useState(false)
-  const [wizardSkipIntro, setWizardSkipIntro] = useState(false)
   const [showTour, setShowTour] = useState(false)
-  const [tourStartsWizard, setTourStartsWizard] = useState(false)
   const [liveQuestion, setLiveQuestion] = useState<BonusQuestion | null>(null)
   const [liveAnswer, setLiveAnswer] = useState('')
   const [liveSaving, setLiveSaving] = useState(false)
@@ -40,22 +36,10 @@ export default function AppShell({
     async function checkNotifications() {
       if (!profile) return
 
-      // Eerst de onboarding tour als die nog nooit is afgerond
+      // Onboarding tour als die nog nooit is afgerond
       const onboardedAt = (profile as Profile & { onboarded_at?: string | null }).onboarded_at
       if (!onboardedAt) {
-        // Aan einde van de tour starten we de wizard automatisch (eerste keer)
-        setTourStartsWizard(true)
         setShowTour(true)
-        return
-      }
-
-      const { count } = await supabase
-        .from('bonus_answers')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', profile.id)
-
-      if (count === 0) {
-        setShowWizard(true)
         return
       }
 
@@ -105,22 +89,14 @@ export default function AppShell({
     // Sla over of kruisje — markeer als onboarded zodat 'ie niet weer komt
     await markOnboarded()
     setShowTour(false)
-    setTourStartsWizard(false)
   }
 
   async function handleTourFinish() {
-    // 'Aan de slag' → markeer onboarded en start wizard (alleen first-time)
     await markOnboarded()
     setShowTour(false)
-    if (tourStartsWizard) {
-      setWizardSkipIntro(true)  // tour was net de welkom, sla wizard-intro over
-      setShowWizard(true)
-    }
-    setTourStartsWizard(false)
   }
 
   function openHelp() {
-    setTourStartsWizard(false)  // bij handmatig openen geen wizard erna
     setShowTour(true)
   }
 
@@ -220,13 +196,6 @@ export default function AppShell({
         />
       )}
 
-      {/* Wizard modal */}
-      {showWizard && (
-        <WizardModal
-          skipIntro={wizardSkipIntro}
-          onClose={() => { setShowWizard(false); setWizardSkipIntro(false) }}
-        />
-      )}
 
       {/* Live bonusvraag pop-up */}
       {liveQuestion && !showWizard && (

@@ -215,7 +215,7 @@ export default function PredictClient({
             )}
 
             {groupTab === 2 && (
-              <div className="max-w-xl space-y-3">
+              <div className="max-w-xl mx-auto space-y-3">
                 {groupQs.length === 0 ? (
                   <div className="text-center py-12 text-[#aaa]">
                     <p className="text-3xl mb-3">🎯</p>
@@ -242,7 +242,7 @@ export default function PredictClient({
 
       {/* ── TOERNOOI ── (overkoepelend + knockout-fase) */}
       {mainTab === 'tournament' && (
-        <div className="p-4 lg:p-8 max-w-xl space-y-6">
+        <div className="p-4 lg:p-8 max-w-xl mx-auto space-y-6">
           {/* Heel toernooi */}
           {tourQs.length > 0 && (
             <div>
@@ -292,7 +292,7 @@ export default function PredictClient({
 
       {/* ── BONUSVRAGEN ── (live / actuele vragen) */}
       {mainTab === 'live' && (
-        <div className="p-4 lg:p-8 max-w-xl space-y-3">
+        <div className="p-4 lg:p-8 max-w-xl mx-auto space-y-3">
           {liveQs.length > 0 ? (
             <>
               <div className="flex items-center gap-2 mb-1">
