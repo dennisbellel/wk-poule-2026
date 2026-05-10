@@ -195,7 +195,7 @@ export default function AppShell({
 
 
       {/* Live bonusvraag pop-up */}
-      {liveQuestion && !showWizard && (
+      {liveQuestion && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
             <div className="bg-[#1a5c38] px-6 py-4">
