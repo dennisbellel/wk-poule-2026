@@ -36,8 +36,8 @@ function PredRow({ label, icon, homeVal, awayVal, pts, showResult, single }: {
 }) {
   const totalPts = pts !== undefined ? pts : 0
 
+  // Grid met symmetrische zijkolommen → score wordt echt gecentreerd binnen de kaart
   return (
-    {/* Grid met symmetrische zijkolommen → score wordt echt gecentreerd binnen de kaart */}
     <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef] last:border-0">
       <span className="flex items-center gap-1.5 text-xs text-[#888] min-w-0">
         {icon}{label}
