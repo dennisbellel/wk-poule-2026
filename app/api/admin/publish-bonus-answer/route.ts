@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { calculateBonusPoints } from '@/lib/points/calculate'
-import { DEFAULT_SCORING, type ScoringKeys, type BonusAnswer } from '@/types'
+import { calculateBonusPoints, sortLeaderboard } from '@/lib/points/calculate'
+import { DEFAULT_SCORING, type ScoringKeys, type BonusAnswer, type LeaderboardEntry } from '@/types'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -18,6 +18,17 @@ export async function POST(request: Request) {
   }
 
   const admin = await createAdminClient()
+
+  // Snapshot huidige ranks → previous_rank
+  const { data: lbBefore } = await admin.from('leaderboard').select('*')
+  if (lbBefore) {
+    const ranked = sortLeaderboard(lbBefore as LeaderboardEntry[])
+    await Promise.all(
+      ranked.map(r =>
+        admin.from('profiles').update({ previous_rank: r.rank }).eq('id', r.user_id)
+      )
+    )
+  }
 
   // Update vraag
   const { data: question, error: qErr } = await admin

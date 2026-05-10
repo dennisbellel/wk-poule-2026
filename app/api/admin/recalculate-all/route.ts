@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { calculateMatchPoints, calculateGroupStandingPoints, calculateBonusPoints, type ActualGroupStanding } from '@/lib/points/calculate'
-import { DEFAULT_SCORING, type ScoringKeys, type Match, type MatchPrediction, type GroupStandingPrediction, type BonusQuestion, type BonusAnswer } from '@/types'
+import { calculateMatchPoints, calculateGroupStandingPoints, calculateBonusPoints, sortLeaderboard, type ActualGroupStanding } from '@/lib/points/calculate'
+import { DEFAULT_SCORING, type ScoringKeys, type Match, type MatchPrediction, type GroupStandingPrediction, type BonusQuestion, type BonusAnswer, type LeaderboardEntry } from '@/types'
 
 const NEW_SCORING_DEFAULTS: { key: keyof ScoringKeys; value: number; label_nl: string; category: string }[] = [
   { key: 'match_ft_team', value: DEFAULT_SCORING.match_ft_team, label_nl: 'Eindstand per team correct', category: 'Wedstrijd' },
@@ -25,6 +25,17 @@ export async function POST() {
   if (!profile?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const admin = await createAdminClient()
+
+  // 0) Snapshot huidige ranks naar previous_rank — zodat de leaderboard delta's kan tonen
+  const { data: lbBefore } = await admin.from('leaderboard').select('*')
+  if (lbBefore) {
+    const ranked = sortLeaderboard(lbBefore as LeaderboardEntry[])
+    await Promise.all(
+      ranked.map(r =>
+        admin.from('profiles').update({ previous_rank: r.rank }).eq('id', r.user_id)
+      )
+    )
+  }
 
   // 1) Migreer scoring_config: voeg nieuwe keys toe (idempotent), verwijder oude
   for (const row of NEW_SCORING_DEFAULTS) {
