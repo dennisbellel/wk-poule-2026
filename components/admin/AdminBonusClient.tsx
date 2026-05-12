@@ -164,6 +164,28 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, active: newVal } : x))
   }
 
+  // Wissel sort_order met de aangrenzende vraag in de gesorteerde lijst
+  async function moveQuestion(idx: number, dir: -1 | 1) {
+    const target = idx + dir
+    if (target < 0 || target >= sorted.length) return
+    const a = sorted[idx]
+    const b = sorted[target]
+    const aOrder = a.sort_order
+    const bOrder = b.sort_order
+
+    // Optimistische update
+    setQuestions(prev => prev.map(q => {
+      if (q.id === a.id) return { ...q, sort_order: bOrder }
+      if (q.id === b.id) return { ...q, sort_order: aOrder }
+      return q
+    }))
+
+    await Promise.all([
+      supabase.from('bonus_questions').update({ sort_order: bOrder }).eq('id', a.id),
+      supabase.from('bonus_questions').update({ sort_order: aOrder }).eq('id', b.id),
+    ])
+  }
+
   async function handleDelete(id: string) {
     await supabase.from('bonus_questions').delete().eq('id', id)
     setQuestions(prev => prev.filter(q => q.id !== id))
@@ -213,12 +235,32 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
 
       {/* Vragenlijst */}
       <div className="space-y-3">
-        {sorted.map(q => (
+        {sorted.map((q, idx) => (
           <div key={q.id} className={`bg-white rounded-2xl border transition-all ${
             q.active ? 'border-[#e5e1d8]' : 'border-[#f0ede6] opacity-60'
           }`}>
             <div className="px-5 py-4">
               <div className="flex items-start gap-3">
+                {/* Sorteer-pijltjes links */}
+                <div className="flex flex-col gap-0.5 flex-shrink-0">
+                  <button
+                    onClick={() => moveQuestion(idx, -1)}
+                    disabled={idx === 0}
+                    title="Omhoog"
+                    className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    onClick={() => moveQuestion(idx, 1)}
+                    disabled={idx === sorted.length - 1}
+                    title="Omlaag"
+                    className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    ↓
+                  </button>
+                </div>
+
                 {/* Icoon */}
                 <span className="text-2xl flex-shrink-0 mt-0.5">{q.icon}</span>
 
