@@ -117,23 +117,25 @@ export default function PredictClient({
         </div>
       )}
 
-      {/* Header met drie hoofd-tabs */}
-      <div className="bg-[#1a5c38] px-4 lg:px-8 pt-4 lg:pt-5">
-        <h1 className="heading text-xl font-extrabold text-white mb-4 hidden lg:block">Voorspellingen</h1>
-        <div className="flex gap-1">
-          {MAIN_TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setMainTab(t.id as typeof mainTab)}
-              className={`flex-1 lg:flex-none px-4 pt-3 pb-2.5 rounded-t-xl border-0 cursor-pointer text-left transition-colors ${
-                mainTab === t.id ? 'bg-white' : 'bg-transparent hover:bg-white/10'
-              }`}
-            >
-              <span className={`block text-sm font-bold ${mainTab === t.id ? 'text-[#1a5c38]' : 'text-white/80'}`}>
-                {t.label}
-              </span>
-            </button>
-          ))}
+      {/* Header met drie hoofd-tabs — horizontaal scrollbaar op mobile zonder dat hele pagina schuift */}
+      <div className="bg-[#1a5c38] pt-4 lg:pt-5 overflow-x-auto overflow-y-hidden">
+        <div className="px-4 lg:px-8 min-w-max">
+          <h1 className="heading text-xl font-extrabold text-white mb-4 hidden lg:block">Voorspellingen</h1>
+          <div className="flex gap-1">
+            {MAIN_TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setMainTab(t.id as typeof mainTab)}
+                className={`flex-shrink-0 px-4 pt-3 pb-2.5 rounded-t-xl border-0 cursor-pointer text-left transition-colors whitespace-nowrap ${
+                  mainTab === t.id ? 'bg-white' : 'bg-transparent hover:bg-white/10'
+                }`}
+              >
+                <span className={`block text-sm font-bold ${mainTab === t.id ? 'text-[#1a5c38]' : 'text-white/80'}`}>
+                  {t.label}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

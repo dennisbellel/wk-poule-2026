@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import AdminSyncButton from '@/components/admin/AdminSyncButton'
 import { formatDateTimeNL } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
@@ -23,7 +22,6 @@ export default async function AdminPage() {
     { count: userCount },
     { count: matchCount },
     { count: predCount },
-    { data: syncLog },
     { data: pendingMatches },
     { data: pendingBonusQs },
     { data: upcomingMatchesNoTeams },
@@ -31,7 +29,6 @@ export default async function AdminPage() {
     supabase.from('profiles').select('*', { count: 'exact', head: true }),
     supabase.from('matches').select('*', { count: 'exact', head: true }),
     supabase.from('match_predictions').select('*', { count: 'exact', head: true }),
-    supabase.from('sync_log').select('*').order('synced_at', { ascending: false }).limit(5),
     // Wedstrijden waarvan de aftrap > 2u geleden was, maar status nog niet 'finished'
     supabase.from('matches')
       .select('id, scheduled_at, group_id, phase, home_team:home_team_id(name_nl, flag), away_team:away_team_id(name_nl, flag)')
@@ -53,8 +50,6 @@ export default async function AdminPage() {
       .lte('scheduled_at', new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString())
       .or('home_team_id.is.null,away_team_id.is.null'),
   ])
-
-  const lastSync = syncLog?.[0]
 
   const todos: Todo[] = []
 
@@ -148,36 +143,6 @@ export default async function AdminPage() {
         )}
       </div>
 
-      {/* API Sync */}
-      <div className="bg-white rounded-2xl border border-[#e5e1d8] p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-800">football-data.org API</h2>
-            <p className="text-xs text-[#aaa] mt-0.5">
-              {lastSync?.status === 'success'
-                ? `Laatste sync: ${new Date(lastSync.synced_at).toLocaleString('nl-NL')} · ${lastSync.matches_updated} wedstrijden bijgewerkt`
-                : 'Nog niet gesynchroniseerd'}
-            </p>
-          </div>
-          <div className={`tag ${lastSync?.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-[#f0ede6] text-[#888]'}`}>
-            {lastSync?.status === 'success' ? '✓ Verbonden' : 'Onbekend'}
-          </div>
-        </div>
-        <AdminSyncButton />
-        {syncLog && syncLog.length > 0 && (
-          <div className="mt-4 space-y-1">
-            <p className="text-xs font-semibold text-[#aaa] uppercase tracking-wide mb-2">Sync geschiedenis</p>
-            {syncLog.map(log => (
-              <div key={log.id} className="flex justify-between text-xs text-[#888] py-1 border-b border-[#f6f4ef]">
-                <span>{new Date(log.synced_at).toLocaleString('nl-NL')}</span>
-                <span className={log.status === 'success' ? 'text-green-600' : 'text-red-500'}>
-                  {log.status === 'success' ? `✓ ${log.matches_updated} bijgewerkt` : `✗ ${log.error}`}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }

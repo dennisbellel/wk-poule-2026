@@ -58,9 +58,10 @@ export default function DeadlineCountdown({
             : 'bg-white border border-[#e5e1d8] hover:bg-[#fafaf9]'
       }`}
     >
-      <div className="flex items-center justify-between gap-3">
+      {/* Mobile: gestapeld (vraag boven, countdown onder). Desktop: naast elkaar. */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className={`text-base flex-shrink-0 ${isVerySoon ? '' : ''}`}>
+          <span className="text-base flex-shrink-0">
             {isVerySoon ? '🔥' : isUrgent ? '⏰' : '🗓️'}
           </span>
           <div className="min-w-0">
@@ -74,7 +75,7 @@ export default function DeadlineCountdown({
             </p>
           </div>
         </div>
-        <span className={`heading text-lg font-extrabold flex-shrink-0 ${
+        <span className={`heading text-lg font-extrabold flex-shrink-0 pl-7 lg:pl-0 ${
           isVerySoon ? 'text-white' : isUrgent ? 'text-amber-700' : 'text-[#1a5c38]'
         }`}>
           {timeStr}
