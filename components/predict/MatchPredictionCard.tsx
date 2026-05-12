@@ -96,11 +96,14 @@ export default function MatchPredictionCard({
   })()
   const set = (k: keyof MatchPrediction, val: unknown) => setV(p => ({ ...p, [k]: val }))
 
+  // Wachtkaart-modus: teams nog niet bekend (typisch knockout-wedstrijd vóór groepsfase af is)
+  const awaitingTeams = !match.home_team_id || !match.away_team_id
+
   const isPast = new Date(match.prediction_deadline_at) < new Date()
   const isFinished = match.status === 'finished'
-  const isLocked = !isFinished && isPast
+  const isLocked = !isFinished && isPast && !awaitingTeams
   const isLive = match.status === 'live'
-  const isOpen = !isFinished && !isPast
+  const isOpen = !isFinished && !isPast && !awaitingTeams
 
   const homeLabel = match.home_team?.name_nl ?? match.home_team_placeholder ?? '?'
   const awayLabel = match.away_team?.name_nl ?? match.away_team_placeholder ?? '?'
@@ -139,6 +142,9 @@ export default function MatchPredictionCard({
           </span>
         </div>
         <div className="flex items-center gap-1.5">
+          {awaitingTeams && !isFinished && (
+            <span className="tag bg-[#f0ede6] text-[#888]">🕐 Wachten op teams</span>
+          )}
           {isOpen && (
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
               isUrgent ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
@@ -194,6 +200,13 @@ export default function MatchPredictionCard({
           </div>
         )}
       </div>
+
+      {/* Wachten op teams (knockout vóór groepsfase af is) */}
+      {awaitingTeams && !isFinished && (
+        <div className="px-3 py-4 text-center text-sm text-[#888]">
+          Voorspelling beschikbaar zodra de teams bekend zijn.
+        </div>
+      )}
 
       {/* Voorspelling sectie */}
       {isFinished && hasExisting && (
