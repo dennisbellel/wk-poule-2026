@@ -37,6 +37,13 @@ export default function BonusQuestionItem({
   const deadlinePast = new Date(question.deadline_at) < new Date()
   const hasVal = value !== ''
 
+  // Player-vragen wachten op spelersdata (bv. landenselecties bekend op 1 juni)
+  const isPlayerType = question.question_type === 'player'
+  const playerPool = isPlayerType
+    ? players.filter(p => !question.team_filter || p.team_id === question.team_filter)
+    : []
+  const waitingForPlayers = isPlayerType && playerPool.length === 0
+
   // Gefilterde spelers: als de vraag een team_filter heeft, alleen spelers van dat team tonen
   const filteredPlayers = players
     .filter(p => !question.team_filter || p.team_id === question.team_filter)
@@ -88,8 +95,15 @@ export default function BonusQuestionItem({
         {hasVal && <span className="tag bg-[#eaf4ef] text-[#1a5c38] flex-shrink-0">✓</span>}
       </div>
 
-      {/* Deadline verstreken */}
-      {deadlinePast ? (
+      {/* Wachten op spelersdata (alleen player-type vragen) */}
+      {waitingForPlayers ? (
+        <div className="bg-[#f6f4ef] rounded-lg px-3 py-2.5 text-sm text-[#888] flex items-center gap-2">
+          <span>🕐</span>
+          <span>Wachten op definitieve selecties — beschikbaar vanaf 1 juni</span>
+        </div>
+
+      /* Deadline verstreken */
+      ) : deadlinePast ? (
         <div className="bg-[#f6f4ef] rounded-lg px-3 py-2 text-sm text-[#888]">
           {value || 'Niet ingevuld'} · <span className="text-[11px]">Deadline verstreken</span>
         </div>

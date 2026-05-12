@@ -5,7 +5,7 @@ export default function AdminInviteForm() {
   const [open, setOpen] = useState(false)
   const [emails, setEmails] = useState('')
   const [loading, setLoading] = useState(false)
-  const [results, setResults] = useState<Array<{ email: string; status: string }>>([])
+  const [results, setResults] = useState<Array<{ email: string; status: string; error?: string }>>([])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -40,9 +40,14 @@ export default function AdminInviteForm() {
             {results.length > 0 ? (
               <div className="space-y-2 mb-4">
                 {results.map(r => (
-                  <div key={r.email} className={`flex justify-between text-sm px-3 py-2 rounded-lg ${r.status === 'invited' ? 'bg-green-50 text-green-700' : r.status === 'already_registered' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`}>
-                    <span>{r.email}</span>
-                    <span>{r.status === 'invited' ? '✓ Verstuurd' : r.status === 'already_registered' ? 'Al geregistreerd' : '✗ Fout'}</span>
+                  <div key={r.email} className={`text-sm px-3 py-2 rounded-lg ${r.status === 'invited' ? 'bg-green-50 text-green-700' : r.status === 'already_registered' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'}`}>
+                    <div className="flex justify-between">
+                      <span>{r.email}</span>
+                      <span>{r.status === 'invited' ? '✓ Verstuurd' : r.status === 'already_registered' ? 'Al geregistreerd' : '✗ Fout'}</span>
+                    </div>
+                    {r.error && (
+                      <p className="text-[11px] mt-1 opacity-80">{r.error}</p>
+                    )}
                   </div>
                 ))}
               </div>

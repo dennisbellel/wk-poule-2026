@@ -36,8 +36,8 @@ function PredRow({ label, icon, homeVal, awayVal, pts, showResult, single }: {
 }) {
   const totalPts = pts !== undefined ? pts : 0
 
+  // Grid met symmetrische zijkolommen → score wordt echt gecentreerd binnen de kaart
   return (
-    {/* Grid met symmetrische zijkolommen → score wordt echt gecentreerd binnen de kaart */}
     <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef] last:border-0">
       <span className="flex items-center gap-1.5 text-xs text-[#888] min-w-0">
         {icon}{label}
@@ -96,11 +96,14 @@ export default function MatchPredictionCard({
   })()
   const set = (k: keyof MatchPrediction, val: unknown) => setV(p => ({ ...p, [k]: val }))
 
+  // Wachtkaart-modus: teams nog niet bekend (typisch knockout-wedstrijd vóór groepsfase af is)
+  const awaitingTeams = !match.home_team_id || !match.away_team_id
+
   const isPast = new Date(match.prediction_deadline_at) < new Date()
   const isFinished = match.status === 'finished'
-  const isLocked = !isFinished && isPast
+  const isLocked = !isFinished && isPast && !awaitingTeams
   const isLive = match.status === 'live'
-  const isOpen = !isFinished && !isPast
+  const isOpen = !isFinished && !isPast && !awaitingTeams
 
   const homeLabel = match.home_team?.name_nl ?? match.home_team_placeholder ?? '?'
   const awayLabel = match.away_team?.name_nl ?? match.away_team_placeholder ?? '?'
@@ -139,6 +142,9 @@ export default function MatchPredictionCard({
           </span>
         </div>
         <div className="flex items-center gap-1.5">
+          {awaitingTeams && !isFinished && (
+            <span className="tag bg-[#f0ede6] text-[#888]">🕐 Wachten op teams</span>
+          )}
           {isOpen && (
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
               isUrgent ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
@@ -194,6 +200,13 @@ export default function MatchPredictionCard({
           </div>
         )}
       </div>
+
+      {/* Wachten op teams (knockout vóór groepsfase af is) */}
+      {awaitingTeams && !isFinished && (
+        <div className="px-3 py-4 text-center text-sm text-[#888]">
+          Voorspelling beschikbaar zodra de teams bekend zijn.
+        </div>
+      )}
 
       {/* Voorspelling sectie */}
       {isFinished && hasExisting && (
@@ -265,40 +278,44 @@ export default function MatchPredictionCard({
         </div>
       )}
 
-      {/* Open: invulformulier */}
+      {/* Open: invulformulier — zelfde grid als breakdown zodat inputs gecentreerd zijn */}
       {isOpen && (
         <div className="bg-white">
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
-            <span className="text-xs text-[#888] w-28 flex-shrink-0">Eindstand</span>
-            <div className="flex items-center gap-1 flex-1 justify-center">
+          <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
+            <span className="text-xs text-[#888]">Eindstand</span>
+            <div className="flex items-center justify-center gap-1">
               <ScoreInput value={v.home_ft} onChange={val => set('home_ft', val)} />
               <span className="text-xs text-[#ccc] px-0.5">–</span>
               <ScoreInput value={v.away_ft} onChange={val => set('away_ft', val)} />
             </div>
+            <span />
           </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
-            <span className="text-xs text-[#888] w-28 flex-shrink-0">Ruststand</span>
-            <div className="flex items-center gap-1 flex-1 justify-center">
+          <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
+            <span className="text-xs text-[#888]">Ruststand</span>
+            <div className="flex items-center justify-center gap-1">
               <ScoreInput value={v.home_ht} onChange={val => set('home_ht', val)} />
               <span className="text-xs text-[#ccc] px-0.5">–</span>
               <ScoreInput value={v.away_ht} onChange={val => set('away_ht', val)} />
             </div>
+            <span />
           </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
-            <span className="flex items-center gap-1.5 text-xs text-[#888] w-28 flex-shrink-0"><YellowCard />Geel</span>
-            <div className="flex items-center gap-1 flex-1 justify-center">
+          <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
+            <span className="flex items-center gap-1.5 text-xs text-[#888]"><YellowCard />Geel</span>
+            <div className="flex items-center justify-center gap-1">
               <ScoreInput value={v.home_yellow} onChange={val => set('home_yellow', val)} />
               <span className="text-xs text-[#ccc] px-0.5">–</span>
               <ScoreInput value={v.away_yellow} onChange={val => set('away_yellow', val)} />
             </div>
+            <span />
           </div>
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
-            <span className="flex items-center gap-1.5 text-xs text-[#888] w-28 flex-shrink-0"><RedCard />Rood</span>
-            <div className="flex items-center gap-1 flex-1 justify-center">
+          <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
+            <span className="flex items-center gap-1.5 text-xs text-[#888]"><RedCard />Rood</span>
+            <div className="flex items-center justify-center gap-1">
               <ScoreInput value={v.home_red} onChange={val => set('home_red', val)} />
               <span className="text-xs text-[#ccc] px-0.5">–</span>
               <ScoreInput value={v.away_red} onChange={val => set('away_red', val)} />
             </div>
+            <span />
           </div>
 
           {/* Knockout extras */}

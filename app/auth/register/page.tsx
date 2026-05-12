@@ -13,12 +13,44 @@ function RegisterForm() {
   const [email, setEmail] = useState('')
   const supabase = createClient()
   const router = useRouter()
+  const [sessionChecked, setSessionChecked] = useState(false)
+  const [alreadyOnboarded, setAlreadyOnboarded] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user.email) setEmail(data.session.user.email)
-    })
+    async function checkSession() {
+      const { data } = await supabase.auth.getSession()
+      const session = data.session
+      if (!session?.user) {
+        // Geen sessie — invite-link niet correct geopend
+        setSessionChecked(true)
+        return
+      }
+      const userEmail = session.user.email ?? ''
+      setEmail(userEmail)
+
+      // Detecteer of dit een gewone (al volledig geregistreerde) gebruiker is
+      // ipv een verse uitnodiging. Bij een uitnodiging is recovery-flow actief en heeft
+      // de user nog geen aangemaakte profiel-rij.
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', session.user.id)
+        .maybeSingle()
+
+      if (existingProfile?.display_name) {
+        // Deze gebruiker is al volledig geregistreerd — register-flow zou zijn wachtwoord
+        // overschrijven. Stuur naar de app of forceer eerst logout.
+        setAlreadyOnboarded(true)
+      }
+      setSessionChecked(true)
+    }
+    checkSession()
   }, [])
+
+  async function handleSignOutAndReturn() {
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+  }
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
@@ -50,14 +82,53 @@ function RegisterForm() {
 
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      await supabase.from('profiles').upsert(
-        { id: user.id, email: user.email!, display_name: displayName, is_admin: false },
-        { onConflict: 'id' }
-      )
+      // Check of er al een profiel bestaat — zo ja, alleen displayName updaten en is_admin niet aanraken
+      const { data: existing } = await supabase
+        .from('profiles').select('id').eq('id', user.id).maybeSingle()
+
+      if (existing) {
+        await supabase.from('profiles')
+          .update({ display_name: displayName, email: user.email! })
+          .eq('id', user.id)
+      } else {
+        await supabase.from('profiles').insert({
+          id: user.id, email: user.email!, display_name: displayName, is_admin: false,
+        })
+      }
     }
 
     router.push('/')
     router.refresh()
+  }
+
+  // Wachten tot we weten of de sessie geldig is voor registratie
+  if (!sessionChecked) {
+    return (
+      <div className="bg-white rounded-2xl border border-[#e5e1d8] p-6 text-center text-sm text-[#aaa]">
+        Laden...
+      </div>
+    )
+  }
+
+  // Als de huidige sessie al een volledig geregistreerd account is: blokkeer het formulier
+  if (alreadyOnboarded) {
+    return (
+      <div className="bg-white rounded-2xl border border-[#e5e1d8] p-6">
+        <h2 className="heading text-xl font-bold text-gray-900 mb-2">Eerst uitloggen</h2>
+        <p className="text-sm text-gray-700 mb-3">
+          Je bent al ingelogd als <strong>{email}</strong>.
+        </p>
+        <p className="text-sm text-gray-700 mb-5">
+          Om een nieuw account aan te maken via een uitnodigingslink moet je eerst uitloggen. Klik daarna opnieuw op de link in je uitnodigingsmail.
+        </p>
+        <button
+          onClick={handleSignOutAndReturn}
+          className="w-full btn-primary py-3"
+        >
+          Uitloggen →
+        </button>
+      </div>
+    )
   }
 
   return (

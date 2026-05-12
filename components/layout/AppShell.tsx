@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { Profile, BonusQuestion, ScoringKeys } from '@/types'
-import WizardModal from '@/components/predict/WizardModal'
 import BonusQuestionItem from '@/components/predict/BonusQuestionItem'
 import OnboardingTour from '@/components/onboarding/OnboardingTour'
 import { createClient } from '@/lib/supabase/client'
@@ -27,10 +26,7 @@ export default function AppShell({
   const pathname = usePathname()
   const supabase = createClient()
 
-  const [showWizard, setShowWizard] = useState(false)
-  const [wizardSkipIntro, setWizardSkipIntro] = useState(false)
   const [showTour, setShowTour] = useState(false)
-  const [tourStartsWizard, setTourStartsWizard] = useState(false)
   const [liveQuestion, setLiveQuestion] = useState<BonusQuestion | null>(null)
   const [liveAnswer, setLiveAnswer] = useState('')
   const [liveSaving, setLiveSaving] = useState(false)
@@ -40,22 +36,10 @@ export default function AppShell({
     async function checkNotifications() {
       if (!profile) return
 
-      // Eerst de onboarding tour als die nog nooit is afgerond
+      // Onboarding tour als die nog nooit is afgerond
       const onboardedAt = (profile as Profile & { onboarded_at?: string | null }).onboarded_at
       if (!onboardedAt) {
-        // Aan einde van de tour starten we de wizard automatisch (eerste keer)
-        setTourStartsWizard(true)
         setShowTour(true)
-        return
-      }
-
-      const { count } = await supabase
-        .from('bonus_answers')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', profile.id)
-
-      if (count === 0) {
-        setShowWizard(true)
         return
       }
 
@@ -88,10 +72,7 @@ export default function AppShell({
 
   // Luister naar custom 'open-help' event vanuit andere pagina's (bijv. profile)
   useEffect(() => {
-    const handler = () => {
-      setTourStartsWizard(false)
-      setShowTour(true)
-    }
+    const handler = () => setShowTour(true)
     window.addEventListener('open-help', handler)
     return () => window.removeEventListener('open-help', handler)
   }, [])
@@ -105,22 +86,14 @@ export default function AppShell({
     // Sla over of kruisje — markeer als onboarded zodat 'ie niet weer komt
     await markOnboarded()
     setShowTour(false)
-    setTourStartsWizard(false)
   }
 
   async function handleTourFinish() {
-    // 'Aan de slag' → markeer onboarded en start wizard (alleen first-time)
     await markOnboarded()
     setShowTour(false)
-    if (tourStartsWizard) {
-      setWizardSkipIntro(true)  // tour was net de welkom, sla wizard-intro over
-      setShowWizard(true)
-    }
-    setTourStartsWizard(false)
   }
 
   function openHelp() {
-    setTourStartsWizard(false)  // bij handmatig openen geen wizard erna
     setShowTour(true)
   }
 
@@ -183,7 +156,7 @@ export default function AppShell({
         {/* Help-knop rechtsboven, altijd bereikbaar */}
         <button
           onClick={openHelp}
-          className="absolute top-3 right-3 lg:top-4 lg:right-6 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 lg:bg-white border border-[#e5e1d8] text-xs font-semibold text-gray-700 hover:bg-[#f6f4ef] shadow-sm transition-colors cursor-pointer backdrop-blur-sm"
+          className="absolute top-3 right-3 lg:top-5 lg:right-6 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 lg:bg-white border border-[#e5e1d8] text-xs font-semibold text-gray-700 hover:bg-[#f6f4ef] shadow-sm transition-colors cursor-pointer backdrop-blur-sm"
         >
           <span className="text-sm">❓</span>
           Help
@@ -220,16 +193,9 @@ export default function AppShell({
         />
       )}
 
-      {/* Wizard modal */}
-      {showWizard && (
-        <WizardModal
-          skipIntro={wizardSkipIntro}
-          onClose={() => { setShowWizard(false); setWizardSkipIntro(false) }}
-        />
-      )}
 
       {/* Live bonusvraag pop-up */}
-      {liveQuestion && !showWizard && (
+      {liveQuestion && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
             <div className="bg-[#1a5c38] px-6 py-4">
