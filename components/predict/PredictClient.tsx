@@ -33,6 +33,7 @@ export default function PredictClient({
 
   // Vier hoofd-tabs: Groepsfase / Knockout / Toernooi / Bonusvragen (= live)
   const [mainTab, setMainTab] = useState<'group' | 'knockout' | 'tournament' | 'live'>('group')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Sub-tabs binnen groepsfase: 0=wedstrijden, 1=poulestand, 2=bonusvragen
   const [groupTab, setGroupTab] = useState(0)
@@ -117,25 +118,67 @@ export default function PredictClient({
         </div>
       )}
 
-      {/* Header met drie hoofd-tabs — horizontaal scrollbaar op mobile zonder dat hele pagina schuift */}
-      <div className="bg-[#1a5c38] pt-4 lg:pt-5 overflow-x-auto overflow-y-hidden">
-        <div className="px-4 lg:px-8 min-w-max">
-          <h1 className="heading text-xl font-extrabold text-white mb-4 hidden lg:block">Voorspellingen</h1>
-          <div className="flex gap-1">
-            {MAIN_TABS.map(t => (
+      {/* Hoofd-tabs: dropdown op mobile, tabs naast elkaar op desktop */}
+      <div className="bg-[#1a5c38] px-4 lg:px-8 pt-4 lg:pt-5">
+        <h1 className="heading text-xl font-extrabold text-white mb-4 hidden lg:block">Voorspellingen</h1>
+
+        {/* Mobile: dropdown */}
+        <div className="lg:hidden relative pb-0">
+          <button
+            onClick={() => setMobileMenuOpen(o => !o)}
+            className="w-full flex items-center justify-between bg-white px-4 py-3 rounded-t-xl border-0 cursor-pointer"
+            aria-haspopup="listbox"
+            aria-expanded={mobileMenuOpen}
+          >
+            <span className="text-sm font-bold text-[#1a5c38]">
+              {MAIN_TABS.find(t => t.id === mainTab)?.label}
+            </span>
+            <span className={`text-[#1a5c38] transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`}>
+              ▾
+            </span>
+          </button>
+          {mobileMenuOpen && (
+            <>
+              {/* Backdrop om dropdown te sluiten bij tap erbuiten */}
               <button
-                key={t.id}
-                onClick={() => setMainTab(t.id as typeof mainTab)}
-                className={`flex-shrink-0 px-4 pt-3 pb-2.5 rounded-t-xl border-0 cursor-pointer text-left transition-colors whitespace-nowrap ${
-                  mainTab === t.id ? 'bg-white' : 'bg-transparent hover:bg-white/10'
-                }`}
-              >
-                <span className={`block text-sm font-bold ${mainTab === t.id ? 'text-[#1a5c38]' : 'text-white/80'}`}>
-                  {t.label}
-                </span>
-              </button>
-            ))}
-          </div>
+                onClick={() => setMobileMenuOpen(false)}
+                className="fixed inset-0 z-10 bg-transparent border-0 cursor-default"
+                aria-label="Sluiten"
+              />
+              <div role="listbox" className="absolute z-20 top-full left-0 right-0 bg-white shadow-lg border border-[#e5e1d8] border-t-0 rounded-b-xl overflow-hidden">
+                {MAIN_TABS.map(t => (
+                  <button
+                    key={t.id}
+                    role="option"
+                    aria-selected={mainTab === t.id}
+                    onClick={() => { setMainTab(t.id as typeof mainTab); setMobileMenuOpen(false) }}
+                    className={`w-full text-left px-4 py-3 text-sm font-semibold border-b border-[#f6f4ef] last:border-0 border-l-0 border-r-0 border-t-0 cursor-pointer transition-colors ${
+                      mainTab === t.id ? 'bg-[#eaf4ef] text-[#1a5c38]' : 'bg-white text-gray-700 hover:bg-[#f6f4ef]'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Desktop: tabs naast elkaar */}
+        <div className="hidden lg:flex gap-1">
+          {MAIN_TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setMainTab(t.id as typeof mainTab)}
+              className={`px-4 pt-3 pb-2.5 rounded-t-xl border-0 cursor-pointer text-left transition-colors whitespace-nowrap ${
+                mainTab === t.id ? 'bg-white' : 'bg-transparent hover:bg-white/10'
+              }`}
+            >
+              <span className={`block text-sm font-bold ${mainTab === t.id ? 'text-[#1a5c38]' : 'text-white/80'}`}>
+                {t.label}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
