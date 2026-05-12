@@ -154,9 +154,10 @@ export default function AppShell({
       {/* Hoofd content — headers over volle breedte, content gecentreerd */}
       <div className="flex-1 min-w-0 flex flex-col relative">
         {/* Help-knop rechtsboven, altijd bereikbaar */}
+        {/* Help-knop: alleen op desktop. Op mobile via profielpagina. */}
         <button
           onClick={openHelp}
-          className="absolute top-3 right-3 lg:top-5 lg:right-6 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 lg:bg-white border border-[#e5e1d8] text-xs font-semibold text-gray-700 hover:bg-[#f6f4ef] shadow-sm transition-colors cursor-pointer backdrop-blur-sm"
+          className="hidden lg:flex absolute top-5 right-6 z-30 items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#e5e1d8] text-xs font-semibold text-gray-700 hover:bg-[#f6f4ef] shadow-sm transition-colors cursor-pointer"
         >
           <span className="text-sm">❓</span>
           Help
