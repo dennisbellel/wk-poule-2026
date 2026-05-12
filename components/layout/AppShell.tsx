@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { Profile, BonusQuestion, ScoringKeys } from '@/types'
 import BonusQuestionItem from '@/components/predict/BonusQuestionItem'
-import OnboardingTour from '@/components/onboarding/OnboardingTour'
+import { TourProvider, useTour } from '@/components/onboarding/TourProvider'
+import TourBanner from '@/components/onboarding/TourBanner'
 import { createClient } from '@/lib/supabase/client'
 import { formatDateTimeNL } from '@/lib/format'
 
@@ -23,26 +24,39 @@ export default function AppShell({
   scoring: ScoringKeys
   children: React.ReactNode
 }) {
+  const onboardedAt = (profile as Profile & { onboarded_at?: string | null })?.onboarded_at
+  const autostart = !!profile && !onboardedAt
+
+  return (
+    <TourProvider profileId={profile?.id ?? null} autostart={autostart}>
+      <AppShellInner profile={profile} scoring={scoring}>{children}</AppShellInner>
+    </TourProvider>
+  )
+}
+
+function AppShellInner({
+  profile, scoring, children,
+}: {
+  profile: Profile | null
+  scoring: ScoringKeys
+  children: React.ReactNode
+}) {
   const pathname = usePathname()
   const supabase = createClient()
+  const { start: startTour } = useTour()
+  // 'scoring' wordt voorlopig niet meer gebruikt in deze layer (tour-content is dynamisch
+  // op stat-niveau, niet meer per-vraag in een legacy modal). Behouden in props zodat
+  // app/(app)/layout.tsx zijn data niet hoeft te wijzigen.
+  void scoring
 
-  const [showTour, setShowTour] = useState(false)
   const [liveQuestion, setLiveQuestion] = useState<BonusQuestion | null>(null)
   const [liveAnswer, setLiveAnswer] = useState('')
   const [liveSaving, setLiveSaving] = useState(false)
   const [liveSaved, setLiveSaved] = useState(false)
 
   useEffect(() => {
-    async function checkNotifications() {
+    async function checkLiveQuestion() {
       if (!profile) return
-
-      // Onboarding tour als die nog nooit is afgerond
-      const onboardedAt = (profile as Profile & { onboarded_at?: string | null }).onboarded_at
-      if (!onboardedAt) {
-        setShowTour(true)
-        return
-      }
-
       const now = new Date().toISOString()
       const { data: liveQuestions } = await supabase
         .from('bonus_questions')
@@ -67,35 +81,15 @@ export default function AppShell({
       if (unanswered.length > 0) setLiveQuestion(unanswered[0])
     }
 
-    checkNotifications()
+    checkLiveQuestion()
   }, [profile])
 
-  // Luister naar custom 'open-help' event vanuit andere pagina's (bijv. profile)
+  // Custom 'open-help' event vanuit andere pagina's (bv. ProfileClient)
   useEffect(() => {
-    const handler = () => setShowTour(true)
+    const handler = () => startTour()
     window.addEventListener('open-help', handler)
     return () => window.removeEventListener('open-help', handler)
-  }, [])
-
-  async function markOnboarded() {
-    if (!profile) return
-    await supabase.from('profiles').update({ onboarded_at: new Date().toISOString() }).eq('id', profile.id)
-  }
-
-  async function handleTourClose() {
-    // Sla over of kruisje — markeer als onboarded zodat 'ie niet weer komt
-    await markOnboarded()
-    setShowTour(false)
-  }
-
-  async function handleTourFinish() {
-    await markOnboarded()
-    setShowTour(false)
-  }
-
-  function openHelp() {
-    setShowTour(true)
-  }
+  }, [startTour])
 
   async function submitLiveAnswer() {
     if (!profile || !liveQuestion || !liveAnswer) return
@@ -151,17 +145,20 @@ export default function AppShell({
         )}
       </aside>
 
-      {/* Hoofd content — headers over volle breedte, content gecentreerd */}
+      {/* Hoofd content */}
       <div className="flex-1 min-w-0 flex flex-col relative">
-        {/* Help-knop rechtsboven, altijd bereikbaar */}
         {/* Help-knop: alleen op desktop. Op mobile via profielpagina. */}
         <button
-          onClick={openHelp}
+          onClick={() => startTour()}
           className="hidden lg:flex absolute top-5 right-6 z-30 items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#e5e1d8] text-xs font-semibold text-gray-700 hover:bg-[#f6f4ef] shadow-sm transition-colors cursor-pointer"
         >
           <span className="text-sm">❓</span>
           Help
         </button>
+
+        {/* Tour-banner — sticky bovenaan content, alleen zichtbaar als tour actief is */}
+        <TourBanner />
+
         <main className="flex-1 pb-20 lg:pb-0 w-full">
           {children}
         </main>
@@ -183,17 +180,6 @@ export default function AppShell({
           )
         })}
       </nav>
-
-      {/* Onboarding tour */}
-      {showTour && profile && (
-        <OnboardingTour
-          displayName={profile.display_name}
-          scoring={scoring}
-          onClose={handleTourClose}
-          onFinish={handleTourFinish}
-        />
-      )}
-
 
       {/* Live bonusvraag pop-up */}
       {liveQuestion && (
