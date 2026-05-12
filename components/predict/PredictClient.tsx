@@ -119,7 +119,7 @@ export default function PredictClient({
       )}
 
       {/* Hoofd-tabs: dropdown op mobile, tabs naast elkaar op desktop */}
-      <div className="bg-[#1a5c38] px-4 lg:px-8 pt-4 lg:pt-5">
+      <div className="bg-[#1a5c38] px-4 lg:px-8 pt-4 lg:pt-5 pb-4 lg:pb-0">
         <h1 className="heading text-xl font-extrabold text-white mb-4 hidden lg:block">Voorspellingen</h1>
 
         {/* Mobile: dropdown */}
