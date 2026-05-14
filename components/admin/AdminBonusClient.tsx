@@ -316,21 +316,40 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
                         ))}
                       </div>
                     ) : (
-                      <div className="flex gap-2 items-center">
-                        <span className="text-xs text-gray-400 flex-shrink-0">Juist antwoord:</span>
-                        <input
-                          type={q.question_type === 'number' ? 'number' : 'text'}
-                          value={q.correct_answer ?? ''}
-                          onChange={e => setCorrectAnswer(q, e.target.value)}
-                          placeholder={
-                            q.question_type === 'number' ? 'bijv. 4' :
-                            q.question_type === 'team' ? 'bijv. NED' :
-                            q.question_type === 'player' ? 'bijv. Gakpo' :
-                            'antwoord...'
-                          }
-                          className="flex-1 max-w-xs bg-[#f6f4ef] border border-[#e5e1d8] rounded-lg px-3 py-1
-                                     text-sm focus:outline-none focus:border-[#1a5c38]"
-                        />
+                      <div>
+                        <div className="flex gap-2 items-center">
+                          <span className="text-xs text-gray-400 flex-shrink-0">Juist antwoord:</span>
+                          <input
+                            type={q.question_type === 'number' ? 'number' : 'text'}
+                            value={q.correct_answer ?? ''}
+                            onChange={e => setCorrectAnswer(q, e.target.value)}
+                            placeholder={
+                              q.question_type === 'number' ? 'bijv. 4' :
+                              q.question_type === 'team' ? 'bijv. NED' :
+                              q.question_type === 'player' ? 'bijv. Gakpo' :
+                              'antwoord...'
+                            }
+                            className="flex-1 max-w-md bg-[#f6f4ef] border border-[#e5e1d8] rounded-lg px-3 py-1
+                                       text-sm focus:outline-none focus:border-[#1a5c38]"
+                          />
+                        </div>
+                        {/* Multi-answer hint en preview */}
+                        {q.question_type !== 'number' && q.question_type !== 'yes_no' && (
+                          <div className="mt-1.5 pl-[88px]">
+                            <p className="text-[10px] text-gray-400">
+                              💡 Meerdere antwoorden mogelijk? Scheid met komma&apos;s (bv. <em>Memphis, Gakpo, Bergwijn</em>)
+                            </p>
+                            {q.correct_answer && q.correct_answer.includes(',') && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {q.correct_answer.split(',').map(a => a.trim()).filter(Boolean).map((a, i) => (
+                                  <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#eaf4ef] text-[#1a5c38] text-[10px] font-semibold">
+                                    {a}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Publiceer knop */}
