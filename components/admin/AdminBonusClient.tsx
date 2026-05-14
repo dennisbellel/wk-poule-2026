@@ -164,26 +164,34 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, active: newVal } : x))
   }
 
-  // Wissel sort_order met de aangrenzende vraag in de gesorteerde lijst
+  // Wissel positie en hernumme ALLE vragen — robuust tegen duplicate sort_orders
   async function moveQuestion(idx: number, dir: -1 | 1) {
     const target = idx + dir
     if (target < 0 || target >= sorted.length) return
-    const a = sorted[idx]
-    const b = sorted[target]
-    const aOrder = a.sort_order
-    const bOrder = b.sort_order
 
-    // Optimistische update
+    // Swap in een nieuwe gesorteerde array
+    const reordered = [...sorted]
+    ;[reordered[idx], reordered[target]] = [reordered[target], reordered[idx]]
+
+    // Geef alle vragen een opeenvolgende sort_order (1, 2, 3, …)
+    const updates = reordered.map((q, i) => ({ id: q.id, sort_order: i + 1 }))
+
+    // Optimistische update lokaal
     setQuestions(prev => prev.map(q => {
-      if (q.id === a.id) return { ...q, sort_order: bOrder }
-      if (q.id === b.id) return { ...q, sort_order: aOrder }
-      return q
+      const u = updates.find(x => x.id === q.id)
+      return u ? { ...q, sort_order: u.sort_order } : q
     }))
 
-    await Promise.all([
-      supabase.from('bonus_questions').update({ sort_order: bOrder }).eq('id', a.id),
-      supabase.from('bonus_questions').update({ sort_order: aOrder }).eq('id', b.id),
-    ])
+    // Update alle gewijzigde rijen in de DB (alleen waar de waarde echt anders is)
+    const changed = updates.filter(u => {
+      const old = sorted.find(q => q.id === u.id)
+      return old && old.sort_order !== u.sort_order
+    })
+    await Promise.all(
+      changed.map(u =>
+        supabase.from('bonus_questions').update({ sort_order: u.sort_order }).eq('id', u.id)
+      )
+    )
   }
 
   async function handleDelete(id: string) {
