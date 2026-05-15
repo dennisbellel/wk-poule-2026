@@ -333,8 +333,8 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
                                        text-sm focus:outline-none focus:border-[#1a5c38]"
                           />
                         </div>
-                        {/* Multi-answer hint en preview */}
-                        {q.question_type !== 'number' && q.question_type !== 'yes_no' && (
+                        {/* Multi-answer hint en preview — niet voor getallen */}
+                        {q.question_type !== 'number' && (
                           <div className="mt-1.5 pl-[88px]">
                             <p className="text-[10px] text-gray-400">
                               💡 Meerdere antwoorden mogelijk? Scheid met komma&apos;s (bv. <em>Memphis, Gakpo, Bergwijn</em>)
