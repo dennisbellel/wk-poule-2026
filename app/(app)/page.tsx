@@ -461,24 +461,27 @@ export default async function DashboardPage() {
               </div>
               {feedItems.map(item => (
                 <div key={item.matchId} className="px-4 py-3 border-b border-[#f6f4ef] last:border-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-sm font-medium flex-1 truncate">
-                      {item.homeFlag} {item.homeName}
-                    </span>
-                    <span className="heading text-base font-extrabold text-[#1a5c38] px-2">
-                      {item.homeFt}–{item.awayFt}
-                    </span>
-                    <span className="text-sm font-medium flex-1 truncate text-right">
-                      {item.awayName} {item.awayFlag}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-base">{item.headlineEmoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-gray-700">{item.headline}</p>
-                      {item.sub && <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>}
+                  <Link href={`/match/${item.matchId}`} className="block hover:bg-[#fafaf9] -mx-4 px-4 py-1 rounded transition-colors">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-sm font-medium flex-1 truncate">
+                        {item.homeFlag} {item.homeName}
+                      </span>
+                      <span className="heading text-base font-extrabold text-[#1a5c38] px-2">
+                        {item.homeFt}–{item.awayFt}
+                      </span>
+                      <span className="text-sm font-medium flex-1 truncate text-right">
+                        {item.awayName} {item.awayFlag}
+                      </span>
                     </div>
-                  </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-base">{item.headlineEmoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-700">{item.headline}</p>
+                        {item.sub && <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>}
+                      </div>
+                      <span className="text-[10px] text-[#ccc] flex-shrink-0 self-center">details →</span>
+                    </div>
+                  </Link>
                   <FeedReactions matchId={item.matchId} reactions={reactionsData || []} currentUserId={user!.id} />
                 </div>
               ))}

@@ -19,25 +19,39 @@ export async function POST(request: Request) {
 
   const admin = await createAdminClient()
 
-  // Snapshot huidige ranks → previous_rank
-  const { data: lbBefore } = await admin.from('leaderboard').select('*')
-  if (lbBefore) {
-    const ranked = sortLeaderboard(lbBefore as LeaderboardEntry[])
-    await Promise.all(
-      ranked.map(r =>
-        admin.from('profiles').update({ previous_rank: r.rank }).eq('id', r.user_id)
+  // Bepaal of dit een eerste publicatie of een correctie is
+  const { data: existingQ, error: existingErr } = await admin
+    .from('bonus_questions')
+    .select('correct_answer, points_value')
+    .eq('id', question_id)
+    .single()
+  if (existingErr || !existingQ) {
+    return NextResponse.json({ error: existingErr?.message || 'Vraag niet gevonden' }, { status: 500 })
+  }
+
+  const isFirstPublish = !existingQ.correct_answer
+
+  // Snapshot huidige ranks alleen bij eerste publicatie
+  if (isFirstPublish) {
+    const { data: lbBefore } = await admin.from('leaderboard').select('*')
+    if (lbBefore) {
+      const ranked = sortLeaderboard(lbBefore as LeaderboardEntry[])
+      await Promise.all(
+        ranked.map(r =>
+          admin.from('profiles').update({ previous_rank: r.rank }).eq('id', r.user_id)
+        )
       )
-    )
+    }
   }
 
   // Update vraag
-  const { data: question, error: qErr } = await admin
+  const { error: qErr } = await admin
     .from('bonus_questions')
     .update({ correct_answer })
     .eq('id', question_id)
-    .select('points_value')
-    .single()
-  if (qErr || !question) return NextResponse.json({ error: qErr?.message || 'Vraag niet gevonden' }, { status: 500 })
+  if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
+
+  const question = existingQ
 
   // Scoring config (voor fallback)
   const { data: scoringRows } = await admin.from('scoring_config').select('key, value')
@@ -62,13 +76,15 @@ export async function POST(request: Request) {
     updated = answers.length
   }
 
-  // Snapshot nieuwe ranks voor de lijngrafiek
-  const { data: lbAfter } = await admin.from('leaderboard').select('*')
-  if (lbAfter) {
-    const ranked = sortLeaderboard(lbAfter as LeaderboardEntry[])
-    await admin.from('rank_history').insert(
-      ranked.map(r => ({ user_id: r.user_id, rank: r.rank, total_points: r.total_points }))
-    )
+  // Snapshot nieuwe ranks alleen bij eerste publicatie
+  if (isFirstPublish) {
+    const { data: lbAfter } = await admin.from('leaderboard').select('*')
+    if (lbAfter) {
+      const ranked = sortLeaderboard(lbAfter as LeaderboardEntry[])
+      await admin.from('rank_history').insert(
+        ranked.map(r => ({ user_id: r.user_id, rank: r.rank, total_points: r.total_points }))
+      )
+    }
   }
 
   return NextResponse.json({ ok: true, recalculated: updated })
