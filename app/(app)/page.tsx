@@ -295,6 +295,21 @@ export default async function DashboardPage() {
     label: string
     sub: string
     done: boolean
+    href: string  // gerichte deeplink naar de juiste tab + specifieke kaart
+  }
+
+  // Bouw deeplinks die naar de juiste tab + sub-tab navigeren, met een hash om de
+  // exacte kaart in beeld te scrollen.
+  function buildMatchHref(m: { id: string; phase: string }): string {
+    if (m.phase === 'group') return `/predict?tab=group&sub=matches#match-${m.id}`
+    return `/predict?tab=knockout#match-${m.id}`
+  }
+
+  function buildBonusHref(q: { id: string; phase: string }): string {
+    if (q.phase === 'group') return `/predict?tab=group&sub=bonus#bonus-${q.id}`
+    if (q.phase === 'live') return `/predict?tab=live#bonus-${q.id}`
+    // tournament + knockout vallen onder de Toernooi-tab
+    return `/predict?tab=tournament#bonus-${q.id}`
   }
 
   const allDeadlineItems: DeadlineItem[] = [
@@ -305,6 +320,7 @@ export default async function DashboardPage() {
       label: `${m.home_team?.flag ?? ''} ${m.home_team?.name_nl ?? m.home_team_placeholder ?? '?'} — ${m.away_team?.name_nl ?? m.away_team_placeholder ?? '?'} ${m.away_team?.flag ?? ''}`,
       sub: `Groep ${m.group_id} · ${m.city ?? ''}`,
       done: predictedMatchIds.has(m.id),
+      href: buildMatchHref(m),
     })),
     ...(openBonusQuestions || []).map(q => ({
       kind: 'bonus' as const,
@@ -313,6 +329,7 @@ export default async function DashboardPage() {
       label: `${q.icon} ${q.question_nl}`,
       sub: `Bonusvraag · ${q.points_value} punten`,
       done: answeredBonusIds.has(q.id),
+      href: buildBonusHref(q),
     })),
   ].sort((a, b) => a.deadline.getTime() - b.deadline.getTime())
 
@@ -388,7 +405,7 @@ export default async function DashboardPage() {
                 return (
                   <Link
                     key={item.id}
-                    href="/predict"
+                    href={item.href}
                     className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 hover:bg-[#fafaf9] transition-colors"
                   >
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${urgent ? 'bg-red-400' : 'bg-amber-400'}`} />

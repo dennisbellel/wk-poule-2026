@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Match, MatchPrediction, GroupStandingPrediction, BonusQuestion, BonusAnswer, Team, Player, ScoringKeys } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import MatchPredictionCard from './MatchPredictionCard'
@@ -39,6 +39,36 @@ export default function PredictClient({
   const [groupTab, setGroupTab] = useState(0)
   const [koRound, setKoRound] = useState('r32')
   const [activeGroup, setActiveGroup] = useState('A')
+
+  // Lees URL bij mount: zet juiste tab + sub-tab, scroll naar hash-element
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const t = params.get('tab')
+    if (t === 'knockout' || t === 'tournament' || t === 'live' || t === 'group') {
+      setMainTab(t)
+    }
+    const sub = params.get('sub')
+    if (sub === 'standing') setGroupTab(1)
+    else if (sub === 'bonus') setGroupTab(2)
+    else if (sub === 'matches') setGroupTab(0)
+
+    const hash = window.location.hash
+    if (!hash) return
+    // KO-match? Bepaal eerst welke ronde
+    const matchId = hash.startsWith('#match-') ? hash.slice('#match-'.length) : null
+    if (matchId) {
+      const ko = koMatches.find(m => m.id === matchId)
+      if (ko) setKoRound(ko.phase)
+    }
+    // Wacht een frame zodat de juiste tab eerst rendert, dan scroll
+    const timer = setTimeout(() => {
+      const el = document.getElementById(hash.slice(1))
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 150)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [localMatchPreds, setLocalMatchPreds] = useState<Record<string, Partial<MatchPrediction>>>(
     Object.fromEntries(matchPredictions.map(p => [p.match_id, p]))

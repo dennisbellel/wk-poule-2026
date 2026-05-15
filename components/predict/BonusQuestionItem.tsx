@@ -74,7 +74,7 @@ export default function BonusQuestionItem({
     : []
 
   return (
-    <div className={`card p-4 ${hasVal ? 'border-[#1a5c38]' : ''}`}>
+    <div id={`bonus-${question.id}`} className={`card p-4 scroll-mt-24 ${hasVal ? 'border-[#1a5c38]' : ''}`}>
       {/* Header */}
       <div className="flex gap-3 items-start mb-3">
         <span className="text-lg flex-shrink-0">{question.icon}</span>
