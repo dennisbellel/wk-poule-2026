@@ -86,8 +86,15 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
   const [publishing, setPublishing] = useState<string | null>(null)
   const [published, setPublished] = useState<Set<string>>(new Set())
 
-  // Gesorteerd op sort_order
-  const sorted = useMemo(() => [...questions].sort((a, b) => a.sort_order - b.sort_order), [questions])
+  // Vragen gegroepeerd per fase, elk intern gesorteerd op sort_order
+  const phaseGroups = useMemo(() => {
+    return PHASE_OPTIONS.map(phase => ({
+      ...phase,
+      questions: questions
+        .filter(q => q.phase === phase.value)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    }))
+  }, [questions])
 
   function openNew() {
     setDraft({ ...EMPTY_QUESTION, sort_order: questions.length + 1 })
@@ -164,27 +171,26 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, active: newVal } : x))
   }
 
-  // Wissel positie en hernumme ALLE vragen — robuust tegen duplicate sort_orders
-  async function moveQuestion(idx: number, dir: -1 | 1) {
+  // Wissel positie BINNEN dezelfde fase. Herverdeelt de bestaande sort_order-waarden
+  // van die fase over de nieuwe volgorde, zodat andere fases onaangeroerd blijven.
+  async function moveQuestion(phaseQuestions: BonusQuestion[], idx: number, dir: -1 | 1) {
     const target = idx + dir
-    if (target < 0 || target >= sorted.length) return
+    if (target < 0 || target >= phaseQuestions.length) return
 
-    // Swap in een nieuwe gesorteerde array
-    const reordered = [...sorted]
+    const reordered = [...phaseQuestions]
     ;[reordered[idx], reordered[target]] = [reordered[target], reordered[idx]]
 
-    // Geef alle vragen een opeenvolgende sort_order (1, 2, 3, …)
-    const updates = reordered.map((q, i) => ({ id: q.id, sort_order: i + 1 }))
+    // De sort_order-waarden van deze fase (oplopend) opnieuw toekennen aan de nieuwe volgorde
+    const orderSlots = phaseQuestions.map(q => q.sort_order)
+    const updates = reordered.map((q, i) => ({ id: q.id, sort_order: orderSlots[i] }))
 
-    // Optimistische update lokaal
     setQuestions(prev => prev.map(q => {
       const u = updates.find(x => x.id === q.id)
       return u ? { ...q, sort_order: u.sort_order } : q
     }))
 
-    // Update alle gewijzigde rijen in de DB (alleen waar de waarde echt anders is)
     const changed = updates.filter(u => {
-      const old = sorted.find(q => q.id === u.id)
+      const old = phaseQuestions.find(q => q.id === u.id)
       return old && old.sort_order !== u.sort_order
     })
     await Promise.all(
@@ -241,33 +247,49 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
         </button>
       </div>
 
-      {/* Vragenlijst */}
-      <div className="space-y-3">
-        {sorted.map((q, idx) => (
-          <div key={q.id} className={`bg-white rounded-2xl border transition-all ${
-            q.active ? 'border-[#e5e1d8]' : 'border-[#f0ede6] opacity-60'
-          }`}>
-            <div className="px-5 py-4">
-              <div className="flex items-start gap-3">
-                {/* Sorteer-pijltjes links */}
-                <div className="flex flex-col gap-0.5 flex-shrink-0">
-                  <button
-                    onClick={() => moveQuestion(idx, -1)}
-                    disabled={idx === 0}
-                    title="Omhoog"
-                    className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    onClick={() => moveQuestion(idx, 1)}
-                    disabled={idx === sorted.length - 1}
-                    title="Omlaag"
-                    className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    ↓
-                  </button>
-                </div>
+      {/* Vragenlijst — gegroepeerd per fase */}
+      <div className="space-y-8">
+        {phaseGroups.map(group => (
+          <div key={group.value}>
+            {/* Fase-kop */}
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-sm font-bold text-gray-800">{group.label}</h2>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-[#f0ede6] text-gray-500 font-medium">
+                {group.questions.length}
+              </span>
+            </div>
+
+            {group.questions.length === 0 ? (
+              <div className="text-center py-6 text-gray-300 text-sm border border-dashed border-[#e5e1d8] rounded-2xl">
+                Geen vragen in deze fase
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {group.questions.map((q, idx) => (
+                  <div key={q.id} className={`bg-white rounded-2xl border transition-all ${
+                    q.active ? 'border-[#e5e1d8]' : 'border-[#f0ede6] opacity-60'
+                  }`}>
+                    <div className="px-5 py-4">
+                      <div className="flex items-start gap-3">
+                        {/* Sorteer-pijltjes links */}
+                        <div className="flex flex-col gap-0.5 flex-shrink-0">
+                          <button
+                            onClick={() => moveQuestion(group.questions, idx, -1)}
+                            disabled={idx === 0}
+                            title="Omhoog"
+                            className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            onClick={() => moveQuestion(group.questions, idx, 1)}
+                            disabled={idx === group.questions.length - 1}
+                            title="Omlaag"
+                            className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
+                          >
+                            ↓
+                          </button>
+                        </div>
 
                 {/* Icoon */}
                 <span className="text-2xl flex-shrink-0 mt-0.5">{q.icon}</span>
@@ -405,18 +427,22 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
               </div>
             </div>
 
-            {/* Verwijder bevestiging */}
-            {confirmDelete === q.id && (
-              <div className="px-5 py-3 bg-red-50 border-t border-red-100 flex items-center gap-3 rounded-b-2xl">
-                <span className="text-sm text-red-600 flex-1">Zeker weten? Dit verwijdert ook alle antwoorden van deelnemers.</span>
-                <button onClick={() => handleDelete(q.id)}
-                  className="px-3 py-1.5 text-xs font-semibold bg-red-500 text-white rounded-lg cursor-pointer hover:bg-red-600">
-                  Ja, verwijder
-                </button>
-                <button onClick={() => setConfirmDelete(null)}
-                  className="px-3 py-1.5 text-xs font-semibold bg-white text-gray-500 border border-gray-200 rounded-lg cursor-pointer">
-                  Annuleer
-                </button>
+                    {/* Verwijder bevestiging */}
+                    {confirmDelete === q.id && (
+                      <div className="px-5 py-3 bg-red-50 border-t border-red-100 flex items-center gap-3 rounded-b-2xl">
+                        <span className="text-sm text-red-600 flex-1">Zeker weten? Dit verwijdert ook alle antwoorden van deelnemers.</span>
+                        <button onClick={() => handleDelete(q.id)}
+                          className="px-3 py-1.5 text-xs font-semibold bg-red-500 text-white rounded-lg cursor-pointer hover:bg-red-600">
+                          Ja, verwijder
+                        </button>
+                        <button onClick={() => setConfirmDelete(null)}
+                          className="px-3 py-1.5 text-xs font-semibold bg-white text-gray-500 border border-gray-200 rounded-lg cursor-pointer">
+                          Annuleer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
