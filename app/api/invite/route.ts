@@ -33,11 +33,11 @@ export async function POST(request: Request) {
       await adminSupabase.from('invited_emails')
         .upsert({ email: cleanEmail, invited_by: user.id }, { onConflict: 'email' })
 
-      // Send invite via Supabase Auth — link gaat eerst via /auth/callback
-      // dat de session-token uitwisselt, daarna door naar /auth/register
+      // Send invite via Supabase Auth — link gaat eerst via /auth/confirm
+      // (tussenpagina tegen link-scanners), daarna /auth/callback en /auth/register
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://wk-poule-2026.vercel.app'
       const { error } = await adminSupabase.auth.admin.inviteUserByEmail(cleanEmail, {
-        redirectTo: `${siteUrl}/auth/callback?next=/auth/register`,
+        redirectTo: `${siteUrl}/auth/confirm?type=invite&next=/auth/register`,
         data: { invited_by: user.id },
       })
 
