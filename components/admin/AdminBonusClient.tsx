@@ -171,26 +171,41 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, active: newVal } : x))
   }
 
-  // Wissel positie BINNEN dezelfde fase. Herverdeelt de bestaande sort_order-waarden
-  // van die fase over de nieuwe volgorde, zodat andere fases onaangeroerd blijven.
+  // Wissel positie BINNEN dezelfde fase. Hernummert daarna ALLE vragen globaal met
+  // unieke, opeenvolgende sort_order-waarden (1..N) volgens fase-volgorde + interne
+  // volgorde. Dit voorkomt het probleem van dubbele sort_orders waarbij verplaatsen
+  // soms geen zichtbaar effect had.
   async function moveQuestion(phaseQuestions: BonusQuestion[], idx: number, dir: -1 | 1) {
     const target = idx + dir
     if (target < 0 || target >= phaseQuestions.length) return
+    const phaseValue = phaseQuestions[0]?.phase
+    if (!phaseValue) return
 
+    // Swap binnen de fase
     const reordered = [...phaseQuestions]
     ;[reordered[idx], reordered[target]] = [reordered[target], reordered[idx]]
 
-    // De sort_order-waarden van deze fase (oplopend) opnieuw toekennen aan de nieuwe volgorde
-    const orderSlots = phaseQuestions.map(q => q.sort_order)
-    const updates = reordered.map((q, i) => ({ id: q.id, sort_order: orderSlots[i] }))
+    // Hernummer alle vragen: fase voor fase (PHASE_OPTIONS-volgorde), uniek oplopend
+    let counter = 1
+    const updates: { id: string; sort_order: number }[] = []
+    for (const phase of PHASE_OPTIONS) {
+      const qs = phase.value === phaseValue
+        ? reordered
+        : questions.filter(q => q.phase === phase.value).sort((a, b) => a.sort_order - b.sort_order)
+      for (const q of qs) {
+        updates.push({ id: q.id, sort_order: counter++ })
+      }
+    }
 
+    // Optimistische update lokaal
     setQuestions(prev => prev.map(q => {
       const u = updates.find(x => x.id === q.id)
       return u ? { ...q, sort_order: u.sort_order } : q
     }))
 
+    // Alleen echt gewijzigde rijen naar de DB
     const changed = updates.filter(u => {
-      const old = phaseQuestions.find(q => q.id === u.id)
+      const old = questions.find(q => q.id === u.id)
       return old && old.sort_order !== u.sort_order
     })
     await Promise.all(
