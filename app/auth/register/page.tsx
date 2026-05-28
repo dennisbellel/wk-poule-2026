@@ -14,43 +14,30 @@ function RegisterForm() {
   const supabase = createClient()
   const router = useRouter()
   const [sessionChecked, setSessionChecked] = useState(false)
-  const [alreadyOnboarded, setAlreadyOnboarded] = useState(false)
+  const [hasSession, setHasSession] = useState(false)
 
   useEffect(() => {
     async function checkSession() {
       const { data } = await supabase.auth.getSession()
       const session = data.session
-      if (!session?.user) {
-        // Geen sessie — invite-link niet correct geopend
-        setSessionChecked(true)
-        return
-      }
-      const userEmail = session.user.email ?? ''
-      setEmail(userEmail)
-
-      // Detecteer of dit een gewone (al volledig geregistreerde) gebruiker is
-      // ipv een verse uitnodiging. Bij een uitnodiging is recovery-flow actief en heeft
-      // de user nog geen aangemaakte profiel-rij.
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('id', session.user.id)
-        .maybeSingle()
-
-      if (existingProfile?.display_name) {
-        // Deze gebruiker is al volledig geregistreerd — register-flow zou zijn wachtwoord
-        // overschrijven. Stuur naar de app of forceer eerst logout.
-        setAlreadyOnboarded(true)
+      if (session?.user) {
+        setHasSession(true)
+        setEmail(session.user.email ?? '')
+        // Voorvul naam met bestaande display_name (bv. e-mail-deel uit de trigger),
+        // gebruiker mag 'm aanpassen
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('id', session.user.id)
+          .maybeSingle()
+        if (existingProfile?.display_name && !existingProfile.display_name.includes('@')) {
+          setDisplayName(existingProfile.display_name)
+        }
       }
       setSessionChecked(true)
     }
     checkSession()
   }, [])
-
-  async function handleSignOutAndReturn() {
-    await supabase.auth.signOut()
-    router.push('/auth/login')
-  }
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
@@ -110,22 +97,20 @@ function RegisterForm() {
     )
   }
 
-  // Als de huidige sessie al een volledig geregistreerd account is: blokkeer het formulier
-  if (alreadyOnboarded) {
+  // Geen sessie → de uitnodigingslink is niet (meer) geldig
+  if (!hasSession) {
     return (
-      <div className="bg-white rounded-2xl border border-[#e5e1d8] p-6">
-        <h2 className="heading text-xl font-bold text-gray-900 mb-2">Eerst uitloggen</h2>
-        <p className="text-sm text-gray-700 mb-3">
-          Je bent al ingelogd als <strong>{email}</strong>.
-        </p>
+      <div className="bg-white rounded-2xl border border-[#e5e1d8] p-6 text-center">
+        <div className="text-3xl mb-3">⚠️</div>
+        <h2 className="heading text-xl font-bold text-gray-900 mb-2">Link verlopen of ongeldig</h2>
         <p className="text-sm text-gray-700 mb-5">
-          Om een nieuw account aan te maken via een uitnodigingslink moet je eerst uitloggen. Klik daarna opnieuw op de link in je uitnodigingsmail.
+          Open je account aan via de knop in je uitnodigingsmail. Lukt het niet? Vraag de organisator om een nieuwe uitnodiging.
         </p>
         <button
-          onClick={handleSignOutAndReturn}
-          className="w-full btn-primary py-3"
+          onClick={() => router.push('/auth/login')}
+          className="w-full btn-secondary py-3"
         >
-          Uitloggen →
+          Naar inloggen
         </button>
       </div>
     )
