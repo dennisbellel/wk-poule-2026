@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Link from 'next/link'
 import type { Match, MatchPrediction, ScoringKeys } from '@/types'
 import { calculateMatchPointsBreakdown } from '@/lib/points/calculate'
 import { formatDateTimeNL, formatDateShortNL, formatTimeNL, isDeadlineUrgent } from '@/lib/format'
@@ -367,6 +368,16 @@ export default function MatchPredictionCard({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Bekijk ieders voorspelling — zichtbaar zodra deadline verstreken (locked) of gespeeld */}
+      {(isLocked || isFinished || isLive) && (
+        <Link
+          href={`/match/${match.id}`}
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 border-t border-[#f6f4ef] text-xs font-semibold text-[#1a5c38] hover:bg-[#fafaf9] transition-colors"
+        >
+          👀 Bekijk ieders voorspelling →
+        </Link>
       )}
     </div>
   )

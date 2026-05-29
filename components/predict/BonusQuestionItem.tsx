@@ -18,6 +18,28 @@ export default function BonusQuestionItem({
   const [q, setQ] = useState('')
   const [posFilter, setPosFilter] = useState('')
   const [editing, setEditing] = useState(false)
+  // Optie 4: ieders antwoord bekijken (alleen na deadline)
+  const [showAll, setShowAll] = useState(false)
+  const [allAnswers, setAllAnswers] = useState<{ answer: string; names: string[]; count: number }[] | null>(null)
+  const [loadingAll, setLoadingAll] = useState(false)
+
+  async function toggleAllAnswers() {
+    if (showAll) { setShowAll(false); return }
+    setShowAll(true)
+    if (allAnswers === null) {
+      setLoadingAll(true)
+      try {
+        const res = await fetch(`/api/bonus-answers/${question.id}`)
+        const json = await res.json()
+        if (res.ok && json.open) setAllAnswers(json.answers)
+        else setAllAnswers([])
+      } catch {
+        setAllAnswers([])
+      } finally {
+        setLoadingAll(false)
+      }
+    }
+  }
   // Lokale state voor text/number — onSave wordt gedebouncet
   const [localValue, setLocalValue] = useState(value)
   useEffect(() => { setLocalValue(value) }, [value])
@@ -230,6 +252,45 @@ export default function BonusQuestionItem({
               <p className="text-sm text-[#aaa] text-center py-3">Nog geen spelers beschikbaar</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Optie 4: ieders antwoord — alleen na de deadline */}
+      {deadlinePast && (
+        <div className="mt-3 pt-3 border-t border-[#f6f4ef]">
+          <button
+            onClick={toggleAllAnswers}
+            className="text-xs font-semibold text-[#1a5c38] cursor-pointer border-0 bg-transparent"
+          >
+            {showAll ? '▾ Verberg ieders antwoord' : '👀 Bekijk ieders antwoord'}
+          </button>
+
+          {showAll && (
+            <div className="mt-2 space-y-1.5">
+              {loadingAll ? (
+                <p className="text-xs text-[#aaa]">Laden...</p>
+              ) : !allAnswers || allAnswers.length === 0 ? (
+                <p className="text-xs text-[#aaa]">Nog geen antwoorden.</p>
+              ) : (
+                allAnswers.map(a => {
+                  const isCorrect = question.correct_answer && allAnswers
+                    ? question.correct_answer.split(',').map(s => s.trim().toLowerCase()).some(c => a.answer.toLowerCase().startsWith(c))
+                    : false
+                  return (
+                    <div key={a.answer} className={`rounded-lg px-3 py-2 ${isCorrect ? 'bg-[#eaf4ef]' : 'bg-[#f6f4ef]'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-sm font-semibold ${isCorrect ? 'text-[#1a5c38]' : 'text-gray-800'}`}>
+                          {isCorrect && '✓ '}{a.answer}
+                        </span>
+                        <span className="text-[11px] text-[#aaa] flex-shrink-0">{a.count}×</span>
+                      </div>
+                      <p className="text-[11px] text-[#888] mt-0.5">{a.names.join(', ')}</p>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
