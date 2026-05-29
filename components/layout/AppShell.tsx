@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import type { Profile, BonusQuestion, ScoringKeys } from '@/types'
 import BonusQuestionItem from '@/components/predict/BonusQuestionItem'
 import OnboardingTour from '@/components/onboarding/OnboardingTour'
+import SetPasswordModal from '@/components/onboarding/SetPasswordModal'
 import { createClient } from '@/lib/supabase/client'
 import { formatDateTimeNL } from '@/lib/format'
 
@@ -28,6 +29,9 @@ export default function AppShell({
   void scoring  // niet meer per-vraag in tour, content is statisch
 
   const [showTour, setShowTour] = useState(false)
+  // Verplichte wachtwoord-modal als de gebruiker nog geen wachtwoord heeft ingesteld
+  const needsPasswordInitial = !!profile && (profile as Profile & { password_set?: boolean }).password_set === false
+  const [needsPassword, setNeedsPassword] = useState(needsPasswordInitial)
   const [liveQuestion, setLiveQuestion] = useState<BonusQuestion | null>(null)
   const [liveAnswer, setLiveAnswer] = useState('')
   const [liveSaving, setLiveSaving] = useState(false)
@@ -36,6 +40,8 @@ export default function AppShell({
   useEffect(() => {
     async function check() {
       if (!profile) return
+      // Eerst wachtwoord laten instellen — geen tour/live-vragen zolang dat niet klaar is
+      if (needsPasswordInitial) return
 
       // Auto-start tour bij eerste login
       const onboardedAt = (profile as Profile & { onboarded_at?: string | null }).onboarded_at
@@ -171,8 +177,17 @@ export default function AppShell({
         })}
       </nav>
 
+      {/* Verplichte wachtwoord-modal — heeft voorrang op alles */}
+      {needsPassword && profile && (
+        <SetPasswordModal
+          email={profile.email}
+          currentName={profile.display_name}
+          onDone={() => setNeedsPassword(false)}
+        />
+      )}
+
       {/* Onboarding tour — modal */}
-      {showTour && (
+      {showTour && !needsPassword && (
         <OnboardingTour
           onClose={handleTourClose}
           onFinish={handleTourClose}
