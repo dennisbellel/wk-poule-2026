@@ -13,7 +13,13 @@ export async function GET(request: Request) {
   const code = searchParams.get('code')
   const tokenHash = searchParams.get('token_hash') || searchParams.get('token')
   const type = searchParams.get('type') as EmailOtpType | null
-  const next = searchParams.get('next') ?? '/'
+  let next = searchParams.get('next') ?? '/'
+
+  // Vangnet: invite en recovery vereisen ALTIJD dat de gebruiker een wachtwoord instelt.
+  // Forceer de registratie-pagina, ongeacht wat 'next' zegt.
+  if (type === 'invite' || type === 'recovery') {
+    next = '/auth/register'
+  }
 
   const supabase = await createClient()
 
