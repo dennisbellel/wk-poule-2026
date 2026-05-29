@@ -17,6 +17,7 @@ export default function BonusQuestionItem({
 }) {
   const [q, setQ] = useState('')
   const [posFilter, setPosFilter] = useState('')
+  const [editing, setEditing] = useState(false)
   // Lokale state voor text/number — onSave wordt gedebouncet
   const [localValue, setLocalValue] = useState(value)
   useEffect(() => { setLocalValue(value) }, [value])
@@ -92,7 +93,7 @@ export default function BonusQuestionItem({
               : 'open'}
           </p>
         </div>
-        {hasVal && <span className="tag bg-[#eaf4ef] text-[#1a5c38] flex-shrink-0">✓</span>}
+        {hasVal && <span className="tag bg-[#1a5c38] text-white flex-shrink-0">✓ Ingevuld</span>}
       </div>
 
       {/* Wachten op spelersdata (alleen player-type vragen) */}
@@ -153,6 +154,24 @@ export default function BonusQuestionItem({
                      bg-[#f6f4ef] outline-none focus:border-[#1a5c38]"
         />
 
+      /* ── TEAM / SPELER: al gekozen → toon prominent met wijzig-optie ─────── */
+      ) : value && !editing ? (
+        <div className="flex items-center justify-between gap-2 bg-[#eaf4ef] border border-[#c8e6d4] rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[#1a5c38] flex-shrink-0">✓</span>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wide text-[#1a5c38]/60 font-semibold">Jouw keuze</p>
+              <p className="text-sm font-bold text-[#1a5c38] truncate">{value}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => { setEditing(true); setQ('') }}
+            className="text-xs font-semibold text-[#1a5c38] underline flex-shrink-0 cursor-pointer border-0 bg-transparent"
+          >
+            Wijzig
+          </button>
+        </div>
+
       /* ── TEAM / SPELER ZOEKEN ─────────────────── */
       ) : (
         <div>
@@ -192,7 +211,7 @@ export default function BonusQuestionItem({
             {opts.slice(0, 20).map(opt => (
               <button
                 key={opt.val}
-                onClick={() => { onSave(opt.val); setQ('') }}
+                onClick={() => { onSave(opt.val); setQ(''); setEditing(false) }}
                 className={`flex justify-between items-center px-3 py-2.5 rounded-xl text-sm
                             cursor-pointer border-0 text-left transition-colors ${
                   value === opt.val
