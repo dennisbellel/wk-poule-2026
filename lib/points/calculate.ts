@@ -165,7 +165,18 @@ export function calculateBonusPoints(
   correctAnswer: string,
   pointsValue: number
 ): number {
-  return answer.trim().toLowerCase() === correctAnswer.trim().toLowerCase()
+  if (!answer || !correctAnswer) return 0
+  const user = answer.trim().toLowerCase()
+  // Admin kan meerdere geldige antwoorden invoeren, gescheiden door komma's.
+  // Bv. correct_answer = "Memphis, Gakpo, Bergwijn" → elk van die spelers telt.
+  const validAnswers = correctAnswer
+    .split(',')
+    .map(a => a.trim().toLowerCase())
+    .filter(Boolean)
+
+  // Match strikt op gelijkheid OF user-answer begint met de valide tekst
+  // (bv. valid "Memphis" matcht ook met opgeslagen "Memphis (Nederland)").
+  return validAnswers.some(v => user === v || user.startsWith(v + ' ') || user.startsWith(v + '('))
     ? pointsValue
     : 0
 }

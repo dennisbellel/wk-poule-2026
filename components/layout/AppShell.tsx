@@ -25,6 +25,7 @@ export default function AppShell({
 }) {
   const pathname = usePathname()
   const supabase = createClient()
+  void scoring  // niet meer per-vraag in tour, content is statisch
 
   const [showTour, setShowTour] = useState(false)
   const [liveQuestion, setLiveQuestion] = useState<BonusQuestion | null>(null)
@@ -33,16 +34,17 @@ export default function AppShell({
   const [liveSaved, setLiveSaved] = useState(false)
 
   useEffect(() => {
-    async function checkNotifications() {
+    async function check() {
       if (!profile) return
 
-      // Onboarding tour als die nog nooit is afgerond
+      // Auto-start tour bij eerste login
       const onboardedAt = (profile as Profile & { onboarded_at?: string | null }).onboarded_at
       if (!onboardedAt) {
         setShowTour(true)
         return
       }
 
+      // Live bonusvraag detectie
       const now = new Date().toISOString()
       const { data: liveQuestions } = await supabase
         .from('bonus_questions')
@@ -63,14 +65,12 @@ export default function AppShell({
 
       const answeredIds = new Set((answers ?? []).map((a: { question_id: string }) => a.question_id))
       const unanswered = liveQuestions.filter((q: BonusQuestion) => !answeredIds.has(q.id))
-
       if (unanswered.length > 0) setLiveQuestion(unanswered[0])
     }
-
-    checkNotifications()
+    check()
   }, [profile])
 
-  // Luister naar custom 'open-help' event vanuit andere pagina's (bijv. profile)
+  // Custom 'open-help' event vanuit andere pagina's (bv. ProfileClient)
   useEffect(() => {
     const handler = () => setShowTour(true)
     window.addEventListener('open-help', handler)
@@ -83,30 +83,18 @@ export default function AppShell({
   }
 
   async function handleTourClose() {
-    // Sla over of kruisje — markeer als onboarded zodat 'ie niet weer komt
     await markOnboarded()
     setShowTour(false)
-  }
-
-  async function handleTourFinish() {
-    await markOnboarded()
-    setShowTour(false)
-  }
-
-  function openHelp() {
-    setShowTour(true)
   }
 
   async function submitLiveAnswer() {
     if (!profile || !liveQuestion || !liveAnswer) return
     setLiveSaving(true)
-
     await supabase.from('bonus_answers').upsert({
       user_id: profile.id,
       question_id: liveQuestion.id,
       answer: liveAnswer,
     }, { onConflict: 'user_id,question_id' })
-
     setLiveSaving(false)
     setLiveSaved(true)
     setTimeout(() => {
@@ -151,12 +139,12 @@ export default function AppShell({
         )}
       </aside>
 
-      {/* Hoofd content — headers over volle breedte, content gecentreerd */}
+      {/* Hoofd content */}
       <div className="flex-1 min-w-0 flex flex-col relative">
-        {/* Help-knop rechtsboven, altijd bereikbaar */}
+        {/* Help-knop: alleen op desktop. Op mobile via profielpagina. */}
         <button
-          onClick={openHelp}
-          className="absolute top-3 right-3 lg:top-5 lg:right-6 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 lg:bg-white border border-[#e5e1d8] text-xs font-semibold text-gray-700 hover:bg-[#f6f4ef] shadow-sm transition-colors cursor-pointer backdrop-blur-sm"
+          onClick={() => setShowTour(true)}
+          className="hidden lg:flex absolute top-5 right-6 z-30 items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#e5e1d8] text-xs font-semibold text-gray-700 hover:bg-[#f6f4ef] shadow-sm transition-colors cursor-pointer"
         >
           <span className="text-sm">❓</span>
           Help
@@ -183,16 +171,13 @@ export default function AppShell({
         })}
       </nav>
 
-      {/* Onboarding tour */}
-      {showTour && profile && (
+      {/* Onboarding tour — modal */}
+      {showTour && (
         <OnboardingTour
-          displayName={profile.display_name}
-          scoring={scoring}
           onClose={handleTourClose}
-          onFinish={handleTourFinish}
+          onFinish={handleTourClose}
         />
       )}
-
 
       {/* Live bonusvraag pop-up */}
       {liveQuestion && (

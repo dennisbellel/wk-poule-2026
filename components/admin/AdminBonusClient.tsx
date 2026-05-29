@@ -86,8 +86,15 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
   const [publishing, setPublishing] = useState<string | null>(null)
   const [published, setPublished] = useState<Set<string>>(new Set())
 
-  // Gesorteerd op sort_order
-  const sorted = useMemo(() => [...questions].sort((a, b) => a.sort_order - b.sort_order), [questions])
+  // Vragen gegroepeerd per fase, elk intern gesorteerd op sort_order
+  const phaseGroups = useMemo(() => {
+    return PHASE_OPTIONS.map(phase => ({
+      ...phase,
+      questions: questions
+        .filter(q => q.phase === phase.value)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    }))
+  }, [questions])
 
   function openNew() {
     setDraft({ ...EMPTY_QUESTION, sort_order: questions.length + 1 })
@@ -164,26 +171,48 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, active: newVal } : x))
   }
 
-  // Wissel sort_order met de aangrenzende vraag in de gesorteerde lijst
-  async function moveQuestion(idx: number, dir: -1 | 1) {
+  // Wissel positie BINNEN dezelfde fase. Hernummert daarna ALLE vragen globaal met
+  // unieke, opeenvolgende sort_order-waarden (1..N) volgens fase-volgorde + interne
+  // volgorde. Dit voorkomt het probleem van dubbele sort_orders waarbij verplaatsen
+  // soms geen zichtbaar effect had.
+  async function moveQuestion(phaseQuestions: BonusQuestion[], idx: number, dir: -1 | 1) {
     const target = idx + dir
-    if (target < 0 || target >= sorted.length) return
-    const a = sorted[idx]
-    const b = sorted[target]
-    const aOrder = a.sort_order
-    const bOrder = b.sort_order
+    if (target < 0 || target >= phaseQuestions.length) return
+    const phaseValue = phaseQuestions[0]?.phase
+    if (!phaseValue) return
 
-    // Optimistische update
+    // Swap binnen de fase
+    const reordered = [...phaseQuestions]
+    ;[reordered[idx], reordered[target]] = [reordered[target], reordered[idx]]
+
+    // Hernummer alle vragen: fase voor fase (PHASE_OPTIONS-volgorde), uniek oplopend
+    let counter = 1
+    const updates: { id: string; sort_order: number }[] = []
+    for (const phase of PHASE_OPTIONS) {
+      const qs = phase.value === phaseValue
+        ? reordered
+        : questions.filter(q => q.phase === phase.value).sort((a, b) => a.sort_order - b.sort_order)
+      for (const q of qs) {
+        updates.push({ id: q.id, sort_order: counter++ })
+      }
+    }
+
+    // Optimistische update lokaal
     setQuestions(prev => prev.map(q => {
-      if (q.id === a.id) return { ...q, sort_order: bOrder }
-      if (q.id === b.id) return { ...q, sort_order: aOrder }
-      return q
+      const u = updates.find(x => x.id === q.id)
+      return u ? { ...q, sort_order: u.sort_order } : q
     }))
 
-    await Promise.all([
-      supabase.from('bonus_questions').update({ sort_order: bOrder }).eq('id', a.id),
-      supabase.from('bonus_questions').update({ sort_order: aOrder }).eq('id', b.id),
-    ])
+    // Alleen echt gewijzigde rijen naar de DB
+    const changed = updates.filter(u => {
+      const old = questions.find(q => q.id === u.id)
+      return old && old.sort_order !== u.sort_order
+    })
+    await Promise.all(
+      changed.map(u =>
+        supabase.from('bonus_questions').update({ sort_order: u.sort_order }).eq('id', u.id)
+      )
+    )
   }
 
   async function handleDelete(id: string) {
@@ -233,33 +262,49 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
         </button>
       </div>
 
-      {/* Vragenlijst */}
-      <div className="space-y-3">
-        {sorted.map((q, idx) => (
-          <div key={q.id} className={`bg-white rounded-2xl border transition-all ${
-            q.active ? 'border-[#e5e1d8]' : 'border-[#f0ede6] opacity-60'
-          }`}>
-            <div className="px-5 py-4">
-              <div className="flex items-start gap-3">
-                {/* Sorteer-pijltjes links */}
-                <div className="flex flex-col gap-0.5 flex-shrink-0">
-                  <button
-                    onClick={() => moveQuestion(idx, -1)}
-                    disabled={idx === 0}
-                    title="Omhoog"
-                    className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    onClick={() => moveQuestion(idx, 1)}
-                    disabled={idx === sorted.length - 1}
-                    title="Omlaag"
-                    className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    ↓
-                  </button>
-                </div>
+      {/* Vragenlijst — gegroepeerd per fase */}
+      <div className="space-y-8">
+        {phaseGroups.map(group => (
+          <div key={group.value}>
+            {/* Fase-kop */}
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-sm font-bold text-gray-800">{group.label}</h2>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-[#f0ede6] text-gray-500 font-medium">
+                {group.questions.length}
+              </span>
+            </div>
+
+            {group.questions.length === 0 ? (
+              <div className="text-center py-6 text-gray-300 text-sm border border-dashed border-[#e5e1d8] rounded-2xl">
+                Geen vragen in deze fase
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {group.questions.map((q, idx) => (
+                  <div key={q.id} className={`bg-white rounded-2xl border transition-all ${
+                    q.active ? 'border-[#e5e1d8]' : 'border-[#f0ede6] opacity-60'
+                  }`}>
+                    <div className="px-5 py-4">
+                      <div className="flex items-start gap-3">
+                        {/* Sorteer-pijltjes links */}
+                        <div className="flex flex-col gap-0.5 flex-shrink-0">
+                          <button
+                            onClick={() => moveQuestion(group.questions, idx, -1)}
+                            disabled={idx === 0}
+                            title="Omhoog"
+                            className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            onClick={() => moveQuestion(group.questions, idx, 1)}
+                            disabled={idx === group.questions.length - 1}
+                            title="Omlaag"
+                            className="w-6 h-6 flex items-center justify-center rounded-md border border-[#e5e1d8] bg-white text-xs text-gray-500 hover:bg-[#f6f4ef] disabled:opacity-20 disabled:cursor-not-allowed cursor-pointer"
+                          >
+                            ↓
+                          </button>
+                        </div>
 
                 {/* Icoon */}
                 <span className="text-2xl flex-shrink-0 mt-0.5">{q.icon}</span>
@@ -308,21 +353,40 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
                         ))}
                       </div>
                     ) : (
-                      <div className="flex gap-2 items-center">
-                        <span className="text-xs text-gray-400 flex-shrink-0">Juist antwoord:</span>
-                        <input
-                          type={q.question_type === 'number' ? 'number' : 'text'}
-                          value={q.correct_answer ?? ''}
-                          onChange={e => setCorrectAnswer(q, e.target.value)}
-                          placeholder={
-                            q.question_type === 'number' ? 'bijv. 4' :
-                            q.question_type === 'team' ? 'bijv. NED' :
-                            q.question_type === 'player' ? 'bijv. Gakpo' :
-                            'antwoord...'
-                          }
-                          className="flex-1 max-w-xs bg-[#f6f4ef] border border-[#e5e1d8] rounded-lg px-3 py-1
-                                     text-sm focus:outline-none focus:border-[#1a5c38]"
-                        />
+                      <div>
+                        <div className="flex gap-2 items-center">
+                          <span className="text-xs text-gray-400 flex-shrink-0">Juist antwoord:</span>
+                          <input
+                            type={q.question_type === 'number' ? 'number' : 'text'}
+                            value={q.correct_answer ?? ''}
+                            onChange={e => setCorrectAnswer(q, e.target.value)}
+                            placeholder={
+                              q.question_type === 'number' ? 'bijv. 4' :
+                              q.question_type === 'team' ? 'bijv. NED' :
+                              q.question_type === 'player' ? 'bijv. Gakpo' :
+                              'antwoord...'
+                            }
+                            className="flex-1 max-w-md bg-[#f6f4ef] border border-[#e5e1d8] rounded-lg px-3 py-1
+                                       text-sm focus:outline-none focus:border-[#1a5c38]"
+                          />
+                        </div>
+                        {/* Multi-answer hint en preview — niet voor getallen */}
+                        {q.question_type !== 'number' && (
+                          <div className="mt-1.5 pl-[88px]">
+                            <p className="text-[10px] text-gray-400">
+                              💡 Meerdere antwoorden mogelijk? Scheid met komma&apos;s (bv. <em>Memphis, Gakpo, Bergwijn</em>)
+                            </p>
+                            {q.correct_answer && q.correct_answer.includes(',') && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {q.correct_answer.split(',').map(a => a.trim()).filter(Boolean).map((a, i) => (
+                                  <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#eaf4ef] text-[#1a5c38] text-[10px] font-semibold">
+                                    {a}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Publiceer knop */}
@@ -378,18 +442,22 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
               </div>
             </div>
 
-            {/* Verwijder bevestiging */}
-            {confirmDelete === q.id && (
-              <div className="px-5 py-3 bg-red-50 border-t border-red-100 flex items-center gap-3 rounded-b-2xl">
-                <span className="text-sm text-red-600 flex-1">Zeker weten? Dit verwijdert ook alle antwoorden van deelnemers.</span>
-                <button onClick={() => handleDelete(q.id)}
-                  className="px-3 py-1.5 text-xs font-semibold bg-red-500 text-white rounded-lg cursor-pointer hover:bg-red-600">
-                  Ja, verwijder
-                </button>
-                <button onClick={() => setConfirmDelete(null)}
-                  className="px-3 py-1.5 text-xs font-semibold bg-white text-gray-500 border border-gray-200 rounded-lg cursor-pointer">
-                  Annuleer
-                </button>
+                    {/* Verwijder bevestiging */}
+                    {confirmDelete === q.id && (
+                      <div className="px-5 py-3 bg-red-50 border-t border-red-100 flex items-center gap-3 rounded-b-2xl">
+                        <span className="text-sm text-red-600 flex-1">Zeker weten? Dit verwijdert ook alle antwoorden van deelnemers.</span>
+                        <button onClick={() => handleDelete(q.id)}
+                          className="px-3 py-1.5 text-xs font-semibold bg-red-500 text-white rounded-lg cursor-pointer hover:bg-red-600">
+                          Ja, verwijder
+                        </button>
+                        <button onClick={() => setConfirmDelete(null)}
+                          className="px-3 py-1.5 text-xs font-semibold bg-white text-gray-500 border border-gray-200 rounded-lg cursor-pointer">
+                          Annuleer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>

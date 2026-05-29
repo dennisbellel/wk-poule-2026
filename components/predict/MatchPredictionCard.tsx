@@ -132,7 +132,7 @@ export default function MatchPredictionCard({
   const isUrgent = isDeadlineUrgent(match.prediction_deadline_at)
 
   return (
-    <div className={`card overflow-hidden ${(hasExisting || saved) && !isFinished ? 'border-[#1a5c38]' : ''}`}>
+    <div id={`match-${match.id}`} className={`card overflow-hidden scroll-mt-24 ${(hasExisting || saved) && !isFinished ? 'border-[#1a5c38]' : ''}`}>
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-[#f6f4ef] flex justify-between items-center flex-wrap gap-2 bg-white">
         <div className="flex gap-2 items-center">

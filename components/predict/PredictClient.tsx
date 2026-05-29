@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Match, MatchPrediction, GroupStandingPrediction, BonusQuestion, BonusAnswer, Team, Player, ScoringKeys } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import MatchPredictionCard from './MatchPredictionCard'
@@ -33,11 +33,42 @@ export default function PredictClient({
 
   // Vier hoofd-tabs: Groepsfase / Knockout / Toernooi / Bonusvragen (= live)
   const [mainTab, setMainTab] = useState<'group' | 'knockout' | 'tournament' | 'live'>('group')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Sub-tabs binnen groepsfase: 0=wedstrijden, 1=poulestand, 2=bonusvragen
   const [groupTab, setGroupTab] = useState(0)
   const [koRound, setKoRound] = useState('r32')
   const [activeGroup, setActiveGroup] = useState('A')
+
+  // Lees URL bij mount: zet juiste tab + sub-tab, scroll naar hash-element
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const t = params.get('tab')
+    if (t === 'knockout' || t === 'tournament' || t === 'live' || t === 'group') {
+      setMainTab(t)
+    }
+    const sub = params.get('sub')
+    if (sub === 'standing') setGroupTab(1)
+    else if (sub === 'bonus') setGroupTab(2)
+    else if (sub === 'matches') setGroupTab(0)
+
+    const hash = window.location.hash
+    if (!hash) return
+    // KO-match? Bepaal eerst welke ronde
+    const matchId = hash.startsWith('#match-') ? hash.slice('#match-'.length) : null
+    if (matchId) {
+      const ko = koMatches.find(m => m.id === matchId)
+      if (ko) setKoRound(ko.phase)
+    }
+    // Wacht een frame zodat de juiste tab eerst rendert, dan scroll
+    const timer = setTimeout(() => {
+      const el = document.getElementById(hash.slice(1))
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 150)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [localMatchPreds, setLocalMatchPreds] = useState<Record<string, Partial<MatchPrediction>>>(
     Object.fromEntries(matchPredictions.map(p => [p.match_id, p]))
@@ -117,15 +148,59 @@ export default function PredictClient({
         </div>
       )}
 
-      {/* Header met drie hoofd-tabs */}
-      <div className="bg-[#1a5c38] px-4 lg:px-8 pt-4 lg:pt-5">
+      {/* Hoofd-tabs: dropdown op mobile, tabs naast elkaar op desktop */}
+      <div className="bg-[#1a5c38] px-4 lg:px-8 pt-4 lg:pt-5 pb-4 lg:pb-0">
         <h1 className="heading text-xl font-extrabold text-white mb-4 hidden lg:block">Voorspellingen</h1>
-        <div className="flex gap-1">
+
+        {/* Mobile: dropdown */}
+        <div className="lg:hidden relative pb-0">
+          <button
+            onClick={() => setMobileMenuOpen(o => !o)}
+            className="w-full flex items-center justify-between bg-white px-4 py-3 rounded-t-xl border-0 cursor-pointer"
+            aria-haspopup="listbox"
+            aria-expanded={mobileMenuOpen}
+          >
+            <span className="text-sm font-bold text-[#1a5c38]">
+              {MAIN_TABS.find(t => t.id === mainTab)?.label}
+            </span>
+            <span className={`text-[#1a5c38] transition-transform ${mobileMenuOpen ? 'rotate-180' : ''}`}>
+              ▾
+            </span>
+          </button>
+          {mobileMenuOpen && (
+            <>
+              {/* Backdrop om dropdown te sluiten bij tap erbuiten */}
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="fixed inset-0 z-10 bg-transparent border-0 cursor-default"
+                aria-label="Sluiten"
+              />
+              <div role="listbox" className="absolute z-20 top-full left-0 right-0 bg-white shadow-lg border border-[#e5e1d8] border-t-0 rounded-b-xl overflow-hidden">
+                {MAIN_TABS.map(t => (
+                  <button
+                    key={t.id}
+                    role="option"
+                    aria-selected={mainTab === t.id}
+                    onClick={() => { setMainTab(t.id as typeof mainTab); setMobileMenuOpen(false) }}
+                    className={`w-full text-left px-4 py-3 text-sm font-semibold border-b border-[#f6f4ef] last:border-0 border-l-0 border-r-0 border-t-0 cursor-pointer transition-colors ${
+                      mainTab === t.id ? 'bg-[#eaf4ef] text-[#1a5c38]' : 'bg-white text-gray-700 hover:bg-[#f6f4ef]'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Desktop: tabs naast elkaar */}
+        <div className="hidden lg:flex gap-1">
           {MAIN_TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setMainTab(t.id as typeof mainTab)}
-              className={`flex-1 lg:flex-none px-4 pt-3 pb-2.5 rounded-t-xl border-0 cursor-pointer text-left transition-colors ${
+              className={`px-4 pt-3 pb-2.5 rounded-t-xl border-0 cursor-pointer text-left transition-colors whitespace-nowrap ${
                 mainTab === t.id ? 'bg-white' : 'bg-transparent hover:bg-white/10'
               }`}
             >

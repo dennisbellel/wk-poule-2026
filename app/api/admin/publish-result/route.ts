@@ -33,20 +33,27 @@ export async function POST(request: Request) {
 
   const admin = await createAdminClient()
 
-  // Eerst: bewaar de huidige ranks als 'previous_rank' zodat we straks delta's kunnen tonen
-  const { data: lbBefore } = await admin.from('leaderboard').select('*')
-  if (lbBefore) {
-    const ranked = sortLeaderboard(lbBefore as LeaderboardEntry[])
-    await Promise.all(
-      ranked.map(r =>
-        admin.from('profiles').update({ previous_rank: r.rank }).eq('id', r.user_id)
-      )
-    )
-  }
-
+  // Eerst de huidige match-staat ophalen — we bepalen hieraan of dit een eerste
+  // publicatie is of een correctie op een al gepubliceerde uitslag.
   const { data: dbMatch, error: matchErr } = await admin
     .from('matches').select('*').eq('id', body.match_id).single()
   if (matchErr || !dbMatch) return NextResponse.json({ error: 'Match not found' }, { status: 404 })
+
+  const isFirstPublish = dbMatch.status !== 'finished'
+
+  // Alleen bij de eerste publicatie van deze wedstrijd previous_rank vastpinnen,
+  // anders raak je bij een correctie de delta-info kwijt (zou steeds 0 worden).
+  if (isFirstPublish) {
+    const { data: lbBefore } = await admin.from('leaderboard').select('*')
+    if (lbBefore) {
+      const ranked = sortLeaderboard(lbBefore as LeaderboardEntry[])
+      await Promise.all(
+        ranked.map(r =>
+          admin.from('profiles').update({ previous_rank: r.rank }).eq('id', r.user_id)
+        )
+      )
+    }
+  }
 
   // Bepaal winner automatisch op basis van eindstand (alleen als niet expliciet meegegeven)
   let winnerTeamId = body.winner_team_id ?? null
@@ -120,13 +127,16 @@ export async function POST(request: Request) {
     // RPC bestaat misschien niet in alle omgevingen
   }
 
-  // Snapshot nieuwe ranks naar rank_history voor de lijngrafiek
-  const { data: lbAfter } = await admin.from('leaderboard').select('*')
-  if (lbAfter) {
-    const ranked = sortLeaderboard(lbAfter as LeaderboardEntry[])
-    await admin.from('rank_history').insert(
-      ranked.map(r => ({ user_id: r.user_id, rank: r.rank, total_points: r.total_points }))
-    )
+  // Snapshot nieuwe ranks alleen bij eerste publicatie (correcties zorgen anders
+  // voor dubbele dots in de lijngrafiek op stats)
+  if (isFirstPublish) {
+    const { data: lbAfter } = await admin.from('leaderboard').select('*')
+    if (lbAfter) {
+      const ranked = sortLeaderboard(lbAfter as LeaderboardEntry[])
+      await admin.from('rank_history').insert(
+        ranked.map(r => ({ user_id: r.user_id, rank: r.rank, total_points: r.total_points }))
+      )
+    }
   }
 
   return NextResponse.json({ ok: true, recalculated })
