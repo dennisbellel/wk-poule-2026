@@ -13,7 +13,10 @@ export default function SetPasswordModal({
   onDone: () => void
 }) {
   const supabase = createClient()
-  const [displayName, setDisplayName] = useState(currentName && !currentName.includes('@') ? currentName : '')
+  // Begin altijd met een leeg naamveld; de "currentName" is meestal het e-mail-deel
+  // (uit de DB-trigger / fallback), wat we niet als echte voornaam willen voorvullen.
+  void currentName
+  const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
   const [showPassword, setShowPassword] = useState(false)
