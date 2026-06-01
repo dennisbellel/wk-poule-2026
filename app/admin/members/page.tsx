@@ -1,5 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import AdminInviteForm from '@/components/admin/AdminInviteForm'
+import AdminMembersList from '@/components/admin/AdminMembersList'
+
+export const dynamic = 'force-dynamic'
 
 export default async function AdminMembersPage() {
   const supabase = await createClient()
@@ -18,33 +21,7 @@ export default async function AdminMembersPage() {
         <AdminInviteForm />
       </div>
 
-      {/* Active members */}
-      <div className="bg-white rounded-2xl border border-[#e5e1d8] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#f6f4ef] flex justify-between items-center">
-          <h2 className="text-sm font-semibold text-gray-800">
-            Actieve deelnemers ({profiles?.length || 0})
-          </h2>
-        </div>
-        {profiles?.map(p => (
-          <div key={p.id} className="flex items-center gap-3 px-5 py-3.5 border-b border-[#f6f4ef] last:border-0">
-            <div className="w-9 h-9 rounded-full bg-[#1a5c38] flex items-center justify-center flex-shrink-0">
-              <span className="heading text-sm font-bold text-white">{p.display_name[0]}</span>
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-900">{p.display_name}</span>
-                {p.is_admin && (
-                  <span className="tag bg-amber-100 text-amber-700">admin</span>
-                )}
-              </div>
-              <span className="text-xs text-[#aaa]">{p.email}</span>
-            </div>
-            <span className="text-xs text-[#aaa]">
-              {new Date(p.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}
-            </span>
-          </div>
-        ))}
-      </div>
+      <AdminMembersList initialMembers={profiles ?? []} />
 
       {/* Pending invites */}
       {pendingInvites.length > 0 && (
