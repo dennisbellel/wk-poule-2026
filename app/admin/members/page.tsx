@@ -12,7 +12,14 @@ export default async function AdminMembersPage() {
     supabase.from('invited_emails').select('*').order('invited_at', { ascending: false }),
   ])
 
-  const pendingInvites = invites?.filter(i => !i.registered_at) || []
+  // Iemand is echt "geactiveerd" als ze een profiel hebben mét een wachtwoord
+  // (password_set = true). Daar vertrouwen we op, niet op invited_emails.registered_at
+  // (die wordt door een DB-trigger gezet die in productie soms niet draait).
+  type ProfileWithPassword = { email: string; password_set?: boolean }
+  const activatedEmails = new Set(
+    (profiles ?? []).filter((p): p is typeof p & { email: string } => (p as ProfileWithPassword).password_set === true).map(p => p.email)
+  )
+  const pendingInvites = (invites ?? []).filter(i => !activatedEmails.has(i.email))
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -21,7 +28,7 @@ export default async function AdminMembersPage() {
         <AdminInviteForm />
       </div>
 
-      <AdminMembersList initialMembers={profiles ?? []} />
+      <AdminMembersList initialMembers={(profiles ?? []).filter(p => (p as { password_set?: boolean }).password_set === true)} />
 
       {/* Pending invites */}
       {pendingInvites.length > 0 && (
