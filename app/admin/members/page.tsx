@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import AdminInviteForm from '@/components/admin/AdminInviteForm'
 import AdminMembersList from '@/components/admin/AdminMembersList'
+import ResendInviteButton from '@/components/admin/ResendInviteButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,8 +44,8 @@ export default async function AdminMembersPage() {
               <div className="w-9 h-9 rounded-full bg-[#e5e1d8] flex items-center justify-center flex-shrink-0">
                 <span className="text-lg">?</span>
               </div>
-              <div className="flex-1">
-                <span className="text-sm text-gray-600">{inv.email}</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-gray-600 truncate block">{inv.email}</span>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="tag bg-[#f0ede6] text-[#888]">uitgenodigd</span>
                   <span className="text-[11px] text-[#aaa]">
@@ -52,6 +53,7 @@ export default async function AdminMembersPage() {
                   </span>
                 </div>
               </div>
+              <ResendInviteButton email={inv.email} />
             </div>
           ))}
         </div>
