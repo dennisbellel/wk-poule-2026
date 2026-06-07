@@ -228,9 +228,9 @@ export default function BonusQuestionItem({
             </div>
           )}
 
-          {/* Resultatenlijst */}
-          <div className="flex flex-col gap-1 max-h-52 overflow-y-auto">
-            {opts.slice(0, 20).map(opt => (
+          {/* Resultatenlijst — geen harde limiet, container scrollt */}
+          <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
+            {opts.map(opt => (
               <button
                 key={opt.val}
                 onClick={() => { onSave(opt.val); setQ(''); setEditing(false) }}
