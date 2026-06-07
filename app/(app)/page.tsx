@@ -5,7 +5,6 @@ import { nl } from 'date-fns/locale'
 import { sortLeaderboard } from '@/lib/points/calculate'
 import { formatDateTimeNL, isDeadlineUrgent } from '@/lib/format'
 import FeedReactions from '@/components/home/FeedReactions'
-import DeadlineCountdown from '@/components/home/DeadlineCountdown'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,41 +21,6 @@ export default async function DashboardPage() {
   const leaderboard = sortLeaderboard(lbRaw || [])
   const myEntry = leaderboard.find(e => e.user_id === user!.id)
 
-  // Eerstvolgende deadline (wedstrijd of bonusvraag) voor de countdown bovenin
-  const nowIso = new Date().toISOString()
-  const [{ data: nextMatchForCountdown }, { data: nextBonusForCountdown }] = await Promise.all([
-    supabase.from('matches')
-      .select('id, prediction_deadline_at, home_team:home_team_id(name_nl), away_team:away_team_id(name_nl), home_team_placeholder, away_team_placeholder')
-      .eq('status', 'scheduled')
-      .gt('prediction_deadline_at', nowIso)
-      .order('prediction_deadline_at', { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    supabase.from('bonus_questions')
-      .select('id, question_nl, deadline_at, icon')
-      .eq('active', true)
-      .gt('deadline_at', nowIso)
-      .order('deadline_at', { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-  ])
-
-  let countdownLabel: string | null = null
-  let countdownDeadline: string | null = null
-  const matchDeadline = nextMatchForCountdown?.prediction_deadline_at
-  const bonusDeadline = nextBonusForCountdown?.deadline_at
-  if (matchDeadline && (!bonusDeadline || new Date(matchDeadline) <= new Date(bonusDeadline))) {
-    const m = nextMatchForCountdown
-    const home = Array.isArray(m?.home_team) ? m.home_team[0] : m?.home_team
-    const away = Array.isArray(m?.away_team) ? m.away_team[0] : m?.away_team
-    const homeName = (home as { name_nl?: string } | null)?.name_nl ?? m?.home_team_placeholder ?? '?'
-    const awayName = (away as { name_nl?: string } | null)?.name_nl ?? m?.away_team_placeholder ?? '?'
-    countdownLabel = `${homeName} - ${awayName}`
-    countdownDeadline = matchDeadline
-  } else if (bonusDeadline) {
-    countdownLabel = `${nextBonusForCountdown?.icon ?? '🎯'} ${nextBonusForCountdown?.question_nl}`
-    countdownDeadline = bonusDeadline
-  }
 
   const { count: predCount } = await supabase
     .from('match_predictions')
@@ -372,11 +336,6 @@ export default async function DashboardPage() {
       </div>
 
       <div className="p-4 lg:p-8 space-y-5">
-        {/* Sectie 1: Live countdown bovenaan */}
-        {countdownLabel && countdownDeadline && (
-          <DeadlineCountdown label={countdownLabel} deadline={countdownDeadline} />
-        )}
-
         {/* Desktop stat cards (mobile staan ze in de hero) */}
         <div className="hidden lg:grid grid-cols-3 gap-4">
           {[
@@ -393,7 +352,7 @@ export default async function DashboardPage() {
 
         {/* Sectie 2: Deadlines + Tussenstand naast elkaar */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Aankomende deadlines */}
+          {/* Aankomende deadlines — prominenter per item met aparte 'Voorspel nu' knop */}
           {deadlineItems.length > 0 ? (
             <div className="card">
               <div className="px-4 py-3 border-b border-[#f6f4ef] flex justify-between items-center">
@@ -403,27 +362,34 @@ export default async function DashboardPage() {
               {deadlineItems.map(item => {
                 const urgent = isUrgent(item.deadline)
                 return (
-                  <Link
+                  <div
                     key={item.id}
-                    href={item.href}
-                    className="flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 hover:bg-[#fafaf9] transition-colors"
+                    className="px-4 py-3.5 border-b border-[#f6f4ef] last:border-0"
                   >
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${urgent ? 'bg-red-400' : 'bg-amber-400'}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate text-gray-900">{item.label}</p>
-                      <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>
+                    <div className="flex items-center gap-3 mb-2.5">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${urgent ? 'bg-red-400' : 'bg-amber-400'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{item.label}</p>
+                        <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          urgent ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
+                        }`}>
+                          {formatDeadline(item.deadline)}
+                        </span>
+                        <p className="text-[10px] text-[#ccc] mt-0.5">
+                          {formatDistanceToNow(item.deadline, { locale: nl, addSuffix: true })}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-shrink-0 text-right">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        urgent ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
-                      }`}>
-                        {formatDeadline(item.deadline)}
-                      </span>
-                      <p className="text-[10px] text-[#ccc] mt-0.5">
-                        {formatDistanceToNow(item.deadline, { locale: nl, addSuffix: true })}
-                      </p>
-                    </div>
-                  </Link>
+                    <Link
+                      href={item.href}
+                      className="block w-full text-center bg-white border border-[#c8e6d4] text-[#1a5c38] text-xs font-semibold rounded-lg py-2 hover:bg-[#eaf4ef] transition-colors"
+                    >
+                      Voorspel nu →
+                    </Link>
+                  </div>
                 )
               })}
             </div>

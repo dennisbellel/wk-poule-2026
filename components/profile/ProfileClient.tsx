@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { Profile } from '@/types'
@@ -6,6 +7,30 @@ import type { Profile } from '@/types'
 export default function ProfileClient({ profile }: { profile: Profile | null }) {
   const supabase = createClient()
   const router = useRouter()
+
+  const initialLarge = (profile as Profile & { display_preference?: string })?.display_preference === 'large'
+  const [largeView, setLargeView] = useState(initialLarge)
+  const [savingView, setSavingView] = useState(false)
+
+  async function toggleLargeView() {
+    if (!profile) return
+    const newValue = !largeView
+    setLargeView(newValue)
+    setSavingView(true)
+    await supabase
+      .from('profiles')
+      .update({ display_preference: newValue ? 'large' : 'normal' })
+      .eq('id', profile.id)
+    setSavingView(false)
+    // Direct toepassen op de huidige sessie zonder refresh
+    if (newValue) {
+      document.documentElement.style.fontSize = '20px'
+      document.documentElement.dataset.display = 'large'
+    } else {
+      document.documentElement.style.fontSize = ''
+      delete document.documentElement.dataset.display
+    }
+  }
 
   async function handleLogout() {
     if (!confirm('Weet je zeker dat je wilt uitloggen?')) return
@@ -39,6 +64,28 @@ export default function ProfileClient({ profile }: { profile: Profile | null }) 
           >
             ❓ Bekijk de rondleiding
           </button>
+
+          {/* Grote weergave — toggle voor gebruikers die liever wat groter lezen */}
+          <div className="card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900">👁 Grote weergave</p>
+                <p className="text-xs text-[#888] mt-0.5">Maakt tekst en knoppen groter, prettiger voor wie minder goed ziet.</p>
+              </div>
+              <button
+                onClick={toggleLargeView}
+                disabled={savingView}
+                aria-label="Grote weergave aan/uit"
+                className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer border-0 flex-shrink-0 ${
+                  largeView ? 'bg-[#1a5c38]' : 'bg-gray-200'
+                } disabled:opacity-50`}
+              >
+                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  largeView ? 'translate-x-6' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+          </div>
 
           {/* Account info */}
           <div className="card p-4">

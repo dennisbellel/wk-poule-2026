@@ -37,6 +37,24 @@ export default function AppShell({
   const [liveSaving, setLiveSaving] = useState(false)
   const [liveSaved, setLiveSaved] = useState(false)
 
+  // Grote-weergave voorkeur toepassen op root html-element. Tailwind gebruikt rem,
+  // dus alle text/padding/icons schalen automatisch mee zodra we de root-font-size
+  // aanpassen. Reset bij unmount of als de voorkeur verandert.
+  useEffect(() => {
+    const pref = (profile as Profile & { display_preference?: string })?.display_preference
+    if (pref === 'large') {
+      document.documentElement.style.fontSize = '20px'
+      document.documentElement.dataset.display = 'large'
+    } else {
+      document.documentElement.style.fontSize = ''
+      delete document.documentElement.dataset.display
+    }
+    return () => {
+      document.documentElement.style.fontSize = ''
+      delete document.documentElement.dataset.display
+    }
+  }, [profile])
+
   useEffect(() => {
     async function check() {
       if (!profile) return
