@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import PredictClient from '@/components/predict/PredictClient'
-import { DEFAULT_SCORING, type ScoringKeys } from '@/types'
+import { DEFAULT_SCORING, type ScoringKeys, type Player } from '@/types'
 
 export default async function PredictPage() {
   const supabase = await createClient()
@@ -54,8 +54,7 @@ export default async function PredictPage() {
 
   // All players — in batches om PostgREST max-rows 1000 te omzeilen, ongeacht
   // de project-instelling
-  type PlayerRow = { id: string; name: string; team_id: string | null; position: string; team: unknown }
-  const allPlayers: PlayerRow[] = []
+  const allPlayers: Player[] = []
   const PAGE = 500
   let from = 0
   while (true) {
@@ -65,7 +64,7 @@ export default async function PredictPage() {
       .order('name', { ascending: true })
       .range(from, from + PAGE - 1)
     if (!batch || batch.length === 0) break
-    allPlayers.push(...(batch as PlayerRow[]))
+    allPlayers.push(...(batch as unknown as Player[]))
     if (batch.length < PAGE) break
     from += PAGE
     if (from > 10000) break
