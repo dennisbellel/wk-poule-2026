@@ -8,15 +8,29 @@ type TeamCount = { id: string; name_nl: string; flag: string; player_count: numb
 export default async function AdminPlayersPage() {
   const supabase = await createClient()
 
-  const [{ data: teams }, { data: players }] = await Promise.all([
-    supabase.from('teams').select('id, name_nl, flag, group_id').order('group_id').order('name_nl'),
-    // .range(0, 9999) omzeilt de PostgREST max-rows default van 1000, zodat
-    // ook bij >1000 spelers iedereen meetelt voor de per-team telling
-    supabase.from('players').select('team_id').range(0, 9999),
-  ])
+  const { data: teams } = await supabase
+    .from('teams').select('id, name_nl, flag, group_id').order('group_id').order('name_nl')
+
+  // Spelers in batches ophalen — .range(0, 9999) blijkt niet altijd betrouwbaar
+  // door PostgREST max-rows, dus loopen we totdat we minder dan een volle batch
+  // terugkrijgen. Zo zijn we onafhankelijk van Supabase-instellingen.
+  const allPlayers: { team_id: string }[] = []
+  const PAGE = 500
+  let from = 0
+  while (true) {
+    const { data: batch } = await supabase
+      .from('players')
+      .select('team_id')
+      .range(from, from + PAGE - 1)
+    if (!batch || batch.length === 0) break
+    allPlayers.push(...batch)
+    if (batch.length < PAGE) break
+    from += PAGE
+    if (from > 10000) break  // veiligheidsklep tegen oneindige loop
+  }
 
   const countByTeam = new Map<string, number>()
-  for (const p of players ?? []) {
+  for (const p of allPlayers) {
     countByTeam.set(p.team_id, (countByTeam.get(p.team_id) ?? 0) + 1)
   }
 

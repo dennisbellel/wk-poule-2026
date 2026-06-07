@@ -52,13 +52,25 @@ export default async function PredictPage() {
     .select('*')
     .eq('user_id', user!.id)
 
-  // All players — range omzeilt PostgREST max-rows 1000 zodat alle WK-spelers
-  // beschikbaar zijn in de bonusvraag-zoeklijsten
-  const { data: players } = await supabase
-    .from('players')
-    .select('*, team:team_id(*)')
-    .order('name', { ascending: true })
-    .range(0, 9999)
+  // All players — in batches om PostgREST max-rows 1000 te omzeilen, ongeacht
+  // de project-instelling
+  type PlayerRow = { id: string; name: string; team_id: string | null; position: string; team: unknown }
+  const allPlayers: PlayerRow[] = []
+  const PAGE = 500
+  let from = 0
+  while (true) {
+    const { data: batch } = await supabase
+      .from('players')
+      .select('*, team:team_id(*)')
+      .order('name', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (!batch || batch.length === 0) break
+    allPlayers.push(...(batch as PlayerRow[]))
+    if (batch.length < PAGE) break
+    from += PAGE
+    if (from > 10000) break
+  }
+  const players = allPlayers
 
   // Scoring config — bepaalt punten per onderdeel in de kaart
   const { data: scoringRows } = await supabase.from('scoring_config').select('key, value')
