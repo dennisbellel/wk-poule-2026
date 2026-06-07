@@ -76,13 +76,17 @@ export default function ProfileClient({ profile }: { profile: Profile | null }) 
                 onClick={toggleLargeView}
                 disabled={savingView}
                 aria-label="Grote weergave aan/uit"
-                className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer border-0 flex-shrink-0 ${
-                  largeView ? 'bg-[#1a5c38]' : 'bg-gray-200'
+                aria-pressed={largeView}
+                role="switch"
+                className={`relative inline-flex items-center h-7 w-12 rounded-full transition-colors cursor-pointer border-0 flex-shrink-0 ${
+                  largeView ? 'bg-[#1a5c38]' : 'bg-gray-300'
                 } disabled:opacity-50`}
               >
-                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                  largeView ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
+                <span
+                  className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${
+                    largeView ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
               </button>
             </div>
           </div>
