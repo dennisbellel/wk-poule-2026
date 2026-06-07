@@ -6,6 +6,7 @@ const ADMIN_NAV = [
   { href: '/admin', label: '📊 Overzicht' },
   { href: '/admin/members', label: '👥 Deelnemers' },
   { href: '/admin/results', label: '⚽ Wedstrijden & Uitslagen' },
+  { href: '/admin/players', label: '👤 Spelers' },
   { href: '/admin/bonus', label: '🎯 Bonusvragen' },
   { href: '/admin/scoring', label: '⚙️ Puntensysteem' },
 ]
