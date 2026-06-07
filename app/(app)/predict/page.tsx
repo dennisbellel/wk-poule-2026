@@ -52,11 +52,13 @@ export default async function PredictPage() {
     .select('*')
     .eq('user_id', user!.id)
 
-  // All players
+  // All players — range omzeilt PostgREST max-rows 1000 zodat alle WK-spelers
+  // beschikbaar zijn in de bonusvraag-zoeklijsten
   const { data: players } = await supabase
     .from('players')
     .select('*, team:team_id(*)')
     .order('name', { ascending: true })
+    .range(0, 9999)
 
   // Scoring config — bepaalt punten per onderdeel in de kaart
   const { data: scoringRows } = await supabase.from('scoring_config').select('key, value')

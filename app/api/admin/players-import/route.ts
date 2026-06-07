@@ -94,18 +94,32 @@ export async function POST(request: Request) {
     deleted = count ?? 0
   }
 
-  // Bulk insert
-  const { error: insertErr, count: insertedCount } = await admin
-    .from('players')
-    .insert(accepted, { count: 'exact' })
-  if (insertErr) {
-    return NextResponse.json({ error: insertErr.message, skipped }, { status: 500 })
+  // Bulk insert in batches van 500 — voorkomt PostgREST max-rows limiet (default 1000)
+  // en houdt request-payloads beheersbaar
+  const BATCH_SIZE = 500
+  let totalInserted = 0
+  const insertErrors: string[] = []
+  for (let i = 0; i < accepted.length; i += BATCH_SIZE) {
+    const batch = accepted.slice(i, i + BATCH_SIZE)
+    const { error: insertErr, count } = await admin
+      .from('players')
+      .insert(batch, { count: 'exact' })
+    if (insertErr) {
+      insertErrors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${insertErr.message}`)
+    } else {
+      totalInserted += count ?? batch.length
+    }
+  }
+
+  if (insertErrors.length > 0 && totalInserted === 0) {
+    return NextResponse.json({ error: insertErrors.join('; '), skipped }, { status: 500 })
   }
 
   return NextResponse.json({
     ok: true,
-    imported: insertedCount ?? accepted.length,
+    imported: totalInserted,
     skipped,
     deleted,
+    batch_errors: insertErrors.length > 0 ? insertErrors : undefined,
   })
 }

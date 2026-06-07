@@ -10,7 +10,9 @@ export default async function AdminPlayersPage() {
 
   const [{ data: teams }, { data: players }] = await Promise.all([
     supabase.from('teams').select('id, name_nl, flag, group_id').order('group_id').order('name_nl'),
-    supabase.from('players').select('team_id'),
+    // .range(0, 9999) omzeilt de PostgREST max-rows default van 1000, zodat
+    // ook bij >1000 spelers iedereen meetelt voor de per-team telling
+    supabase.from('players').select('team_id').range(0, 9999),
   ])
 
   const countByTeam = new Map<string, number>()
