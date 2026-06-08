@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Link from 'next/link'
 
 type Member = {
   id: string
@@ -110,13 +111,22 @@ export default function AdminMembersList({ initialMembers }: { initialMembers: M
               )}
             </div>
             {!isEditing && (
-              <button
-                onClick={() => startEdit(p)}
-                title="Naam wijzigen"
-                className="px-2.5 py-1 text-xs font-semibold text-[#1a5c38] bg-[#eaf4ef] rounded-lg border border-[#c8e6d4] hover:bg-[#d4f0e0] cursor-pointer flex-shrink-0"
-              >
-                ✏️
-              </button>
+              <>
+                <Link
+                  href={`/admin/member/${p.id}`}
+                  title="Voorspellingen bekijken / namens invullen"
+                  className="px-2.5 py-1 text-xs font-semibold text-[#1a5c38] bg-white rounded-lg border border-[#c8e6d4] hover:bg-[#eaf4ef] cursor-pointer flex-shrink-0"
+                >
+                  👁
+                </Link>
+                <button
+                  onClick={() => startEdit(p)}
+                  title="Naam wijzigen"
+                  className="px-2.5 py-1 text-xs font-semibold text-[#1a5c38] bg-[#eaf4ef] rounded-lg border border-[#c8e6d4] hover:bg-[#d4f0e0] cursor-pointer flex-shrink-0"
+                >
+                  ✏️
+                </button>
+              </>
             )}
             <span className="text-xs text-[#aaa] flex-shrink-0 hidden sm:inline">
               {new Date(p.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}

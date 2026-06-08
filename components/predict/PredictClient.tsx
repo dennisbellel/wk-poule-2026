@@ -16,7 +16,7 @@ const KO_ROUNDS = [
 
 export default function PredictClient({
   userId, groupMatches, koMatches, matchPredictions, groupPredictions,
-  teams, bonusQuestions, bonusAnswers, players, scoring,
+  teams, bonusQuestions, bonusAnswers, players, scoring, adminActAs,
 }: {
   userId: string
   groupMatches: Match[]
@@ -28,6 +28,8 @@ export default function PredictClient({
   bonusAnswers: BonusAnswer[]
   players: Player[]
   scoring: ScoringKeys
+  // Als gezet: admin vult namens deze user in. Saves via /api/admin/proxy-save.
+  adminActAs?: { userId: string; displayName: string }
 }) {
   const supabase = createClient()
 
@@ -83,12 +85,27 @@ export default function PredictClient({
     const previous = localMatchPreds[matchId]
     setLocalMatchPreds(prev => ({ ...prev, [matchId]: { ...prev[matchId], ...data } }))
 
-    const { error } = await supabase
-      .from('match_predictions')
-      .upsert({ user_id: userId, match_id: matchId, ...data }, { onConflict: 'user_id,match_id' })
+    let error: { message: string } | null = null
+    if (adminActAs) {
+      // Save via admin proxy zodat de juiste user_id wordt gebruikt
+      const res = await fetch('/api/admin/proxy-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'match',
+          user_id: adminActAs.userId,
+          payload: { match_id: matchId, ...data },
+        }),
+      })
+      if (!res.ok) error = await res.json().catch(() => ({ message: 'Save failed' }))
+    } else {
+      const result = await supabase
+        .from('match_predictions')
+        .upsert({ user_id: userId, match_id: matchId, ...data }, { onConflict: 'user_id,match_id' })
+      error = result.error
+    }
 
     if (error) {
-      // Rollback bij fout
       setLocalMatchPreds(prev => ({ ...prev, [matchId]: previous }))
       setSaveError('Voorspelling niet opgeslagen — probeer opnieuw')
       setTimeout(() => setSaveError(null), 4000)
@@ -100,9 +117,24 @@ export default function PredictClient({
     const previous = localBonusAnswers[questionId]
     setLocalBonusAnswers(prev => ({ ...prev, [questionId]: answer }))
 
-    const { error } = await supabase
-      .from('bonus_answers')
-      .upsert({ user_id: userId, question_id: questionId, answer }, { onConflict: 'user_id,question_id' })
+    let error: { message: string } | null = null
+    if (adminActAs) {
+      const res = await fetch('/api/admin/proxy-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'bonus',
+          user_id: adminActAs.userId,
+          payload: { question_id: questionId, answer },
+        }),
+      })
+      if (!res.ok) error = await res.json().catch(() => ({ message: 'Save failed' }))
+    } else {
+      const result = await supabase
+        .from('bonus_answers')
+        .upsert({ user_id: userId, question_id: questionId, answer }, { onConflict: 'user_id,question_id' })
+      error = result.error
+    }
 
     if (error) {
       setLocalBonusAnswers(prev => ({ ...prev, [questionId]: previous }))
@@ -139,6 +171,21 @@ export default function PredictClient({
 
   return (
     <div>
+      {/* Admin-banner: jij vult namens iemand anders in */}
+      {adminActAs && (
+        <div className="bg-amber-100 border-b-2 border-amber-300 px-4 py-2.5 lg:px-8 flex items-center justify-between gap-3 sticky top-0 z-30">
+          <p className="text-sm text-amber-900">
+            ⚠ Je vult voorspellingen in namens <strong>{adminActAs.displayName}</strong>
+          </p>
+          <a
+            href={`/admin/member/${adminActAs.userId}`}
+            className="text-xs font-semibold text-amber-900 underline whitespace-nowrap"
+          >
+            ← Terug
+          </a>
+        </div>
+      )}
+
       {/* Error toast — onder mobile header / boven content */}
       {saveError && (
         <div className="fixed top-4 inset-x-4 lg:left-auto lg:right-8 lg:w-96 z-50 bg-red-50 border border-red-200 rounded-xl px-4 py-3 shadow-lg flex items-start gap-2">
@@ -285,6 +332,7 @@ export default function PredictClient({
                   teams={teams.filter(t => t.group_id === activeGroup)}
                   predictions={groupPredictions.filter(p => p.group_id === activeGroup)}
                   userId={userId}
+                  adminActAs={adminActAs}
                 />
               </div>
             )}

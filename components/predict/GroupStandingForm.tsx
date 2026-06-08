@@ -14,12 +14,13 @@ const STATS = [
 type StatKey = typeof STATS[number]['key']
 
 export default function GroupStandingForm({
-  groupId, teams, predictions, userId,
+  groupId, teams, predictions, userId, adminActAs,
 }: {
   groupId: string
   teams: Team[]
   predictions: GroupStandingPrediction[]
   userId: string
+  adminActAs?: { userId: string; displayName: string }
 }) {
   const supabase = createClient()
 
@@ -63,16 +64,27 @@ export default function GroupStandingForm({
   async function handleSave() {
     setSaving(true)
     const rows = order.map((teamId, i) => ({
-      user_id: userId,
       group_id: groupId,
       position: i + 1,
       team_id: teamId,
       ...stats[teamId],
     }))
 
-    await supabase
-      .from('group_standing_predictions')
-      .upsert(rows, { onConflict: 'user_id,group_id,position' })
+    if (adminActAs) {
+      await fetch('/api/admin/proxy-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'group',
+          user_id: adminActAs.userId,
+          payload: { rows },
+        }),
+      })
+    } else {
+      await supabase
+        .from('group_standing_predictions')
+        .upsert(rows.map(r => ({ ...r, user_id: userId })), { onConflict: 'user_id,group_id,position' })
+    }
 
     setSaving(false)
     setSaved(true)
