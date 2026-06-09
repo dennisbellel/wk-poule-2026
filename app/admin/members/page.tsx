@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import AdminInviteForm from '@/components/admin/AdminInviteForm'
 import AdminMembersList from '@/components/admin/AdminMembersList'
 import ResendInviteButton from '@/components/admin/ResendInviteButton'
+import AdminCreateAccountForm from '@/components/admin/AdminCreateAccountForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,9 +25,12 @@ export default async function AdminMembersPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="heading text-2xl font-extrabold text-gray-900">Deelnemers</h1>
-        <AdminInviteForm />
+        <div className="flex gap-2">
+          <AdminCreateAccountForm />
+          <AdminInviteForm />
+        </div>
       </div>
 
       <AdminMembersList initialMembers={(profiles ?? []).filter(p => (p as { password_set?: boolean }).password_set === true)} />
