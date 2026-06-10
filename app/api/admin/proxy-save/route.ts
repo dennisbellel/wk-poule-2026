@@ -44,14 +44,17 @@ export async function POST(request: Request) {
   }
 
   if (body.type === 'group') {
-    const { rows } = body.payload as { rows: Array<Record<string, unknown>> }
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return NextResponse.json({ error: 'rows verplicht' }, { status: 400 })
+    const { groupId, rows } = body.payload as { groupId?: string; rows?: Array<Record<string, unknown>> }
+    if (!groupId || !Array.isArray(rows) || rows.length === 0) {
+      return NextResponse.json({ error: 'groupId en rows verplicht' }, { status: 400 })
     }
-    const withUser = rows.map(r => ({ ...r, user_id: body.user_id }))
-    const { error } = await admin
-      .from('group_standing_predictions')
-      .upsert(withUser, { onConflict: 'user_id,group_id,position' })
+    // Atomic DELETE + INSERT via RPC — voorkomt half opgeslagen states bij
+    // volgorde-wisselingen
+    const { error } = await admin.rpc('save_group_predictions', {
+      p_user_id: body.user_id,
+      p_group_id: groupId,
+      p_rows: rows,
+    })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   }

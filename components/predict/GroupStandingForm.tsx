@@ -46,6 +46,7 @@ export default function GroupStandingForm({
   )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   function move(idx: number, dir: -1 | 1) {
     const next = idx + dir
@@ -63,31 +64,53 @@ export default function GroupStandingForm({
 
   async function handleSave() {
     setSaving(true)
+    setSaveError(null)
+
+    // Rij-payload voor de RPC: zonder user_id en group_id ingebakken (die gaan apart)
     const rows = order.map((teamId, i) => ({
-      group_id: groupId,
       position: i + 1,
       team_id: teamId,
       ...stats[teamId],
     }))
 
+    let errorMessage: string | null = null
+
     if (adminActAs) {
-      await fetch('/api/admin/proxy-save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'group',
-          user_id: adminActAs.userId,
-          payload: { rows },
-        }),
-      })
+      try {
+        const res = await fetch('/api/admin/proxy-save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'group',
+            user_id: adminActAs.userId,
+            payload: { groupId, rows },
+          }),
+        })
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}))
+          errorMessage = json.error || 'Opslaan mislukt'
+        }
+      } catch {
+        errorMessage = 'Netwerkfout — probeer opnieuw'
+      }
     } else {
-      await supabase
-        .from('group_standing_predictions')
-        .upsert(rows.map(r => ({ ...r, user_id: userId })), { onConflict: 'user_id,group_id,position' })
+      const { error } = await supabase.rpc('save_group_predictions', {
+        p_user_id: userId,
+        p_group_id: groupId,
+        p_rows: rows,
+      })
+      if (error) errorMessage = error.message
     }
 
     setSaving(false)
-    setSaved(true)
+    if (errorMessage) {
+      setSaveError(errorMessage)
+      setSaved(false)
+      setTimeout(() => setSaveError(null), 6000)
+    } else {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    }
   }
 
   return (
@@ -155,6 +178,16 @@ export default function GroupStandingForm({
         className={`btn-primary w-full py-3 text-sm disabled:opacity-50 ${saved ? 'bg-green-600' : ''}`}>
         {saving ? 'Opslaan...' : saved ? `✓ Groep ${groupId} opgeslagen` : `Groep ${groupId} opslaan`}
       </button>
+
+      {saveError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-2">
+          <span className="text-red-600 flex-shrink-0">⚠</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-red-700">Opslaan mislukt</p>
+            <p className="text-xs text-red-600 mt-0.5">{saveError}</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
