@@ -54,7 +54,7 @@ Belangrijke mappen:
 
 ## RPC functies (Postgres)
 
-- `save_group_predictions(p_user_id, p_group_id, p_rows JSONB)` — atomic DELETE+INSERT voor poulestand. Gebruikt door GroupStandingForm en `/api/admin/proxy-save`. **Belangrijk**: voorkomt halve states bij volgorde-wissels.
+- `save_group_predictions(p_user_id, p_group_id, p_rows JSONB)` — atomic DELETE+INSERT voor poulestand. Gebruikt door GroupStandingForm en `/api/admin/proxy-save`. **Belangrijk**: voorkomt halve states bij volgorde-wissels. Sinds `lock_group_predictions.sql`: weigert saves zodra het toernooi begonnen is (eerste groepswedstrijd-deadline verstreken), behalve via service-role. Bron staat in de repo.
 - `generate_match_activity(p_match_id)` — RPC voor activity feed (kan ontbreken in sommige omgevingen, daarom altijd in try/catch)
 
 ## Auth flow (subtiel!)
@@ -96,9 +96,9 @@ Status: alle bekende migraties zitten in `/supabase/migrations/` en zijn (volgen
 - `add_rank_history.sql` — rank_history tabel + policy
 - `add_onboarded_at.sql` — profiles.onboarded_at
 - `fix_leaderboard_view.sql` — leaderboard view zonder Cartesisch product
+- `lock_group_predictions.sql` — poulestand op slot bij toernooistart (RLS + RPC met deadline-check); gedraaid 11 juni 2026
 - (impliciet) `profiles.password_set boolean DEFAULT false`
 - (impliciet) `profiles.display_preference TEXT DEFAULT 'normal'`
-- (impliciet) `save_group_predictions` RPC functie
 
 Bij twijfel: laat de user de query draaien
 `SELECT column_name FROM information_schema.columns WHERE table_name='profiles' ORDER BY column_name;`
@@ -123,7 +123,9 @@ Bij twijfel: laat de user de query draaien
 - **Spelers-data**: ~1255 spelers per CSV geïmporteerd. FIFA-deadline 1 juni. Mogelijk eind mei extra import-ronde nodig.
 - **Knockout-wedstrijden**: nog niet in DB (wachten op loting na groepsfase). Template-SQL staat klaar in een mappen-notitie of zoek in de chathistorie.
 - **Opa** moet getest worden met "grote weergave" toggle op zijn tablet — UX-feedback verwacht.
-- **WizardModal.tsx** en **DeadlineCountdown.tsx** zijn niet meer geïmporteerd — kunnen weg in een opruim-ronde.
+- **Backup**: admin-dashboard heeft een "💾 Backup downloaden"-knop (`/api/admin/export`, alle tabellen als JSON). Herinner de gebruiker er af en toe aan tijdens het toernooi.
+- **Poulestand-punten** worden automatisch herberekend zodra een groep compleet gespeeld is (via publish-result); punten tellen alleen voor complete groepen. "Herbereken alles" hanteert dezelfde regel.
+- **1000-rijen-cap**: gebruik `fetchAllRows` uit `/lib/supabase/fetchAll.ts` voor tabellen die groot kunnen worden (voorspellingen, antwoorden, spelers).
 
 ## Werkstijl met de gebruiker
 
