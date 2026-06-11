@@ -54,7 +54,8 @@ Belangrijke mappen:
 
 ## RPC functies (Postgres)
 
-- `save_group_predictions(p_user_id, p_group_id, p_rows JSONB)` — atomic DELETE+INSERT voor poulestand. Gebruikt door GroupStandingForm en `/api/admin/proxy-save`. **Belangrijk**: voorkomt halve states bij volgorde-wissels. Sinds `lock_group_predictions.sql`: weigert saves zodra het toernooi begonnen is (eerste groepswedstrijd-deadline verstreken), behalve via service-role. Bron staat in de repo.
+- `save_group_predictions(p_user_id, p_group_id, p_rows JSONB)` — atomic DELETE+INSERT voor poulestand. Gebruikt door GroupStandingForm en `/api/admin/proxy-save`. **Belangrijk**: voorkomt halve states bij volgorde-wissels. Weigert saves na de poulestand-deadline, behalve via service-role. Bron staat in de repo.
+- `group_predictions_deadline()` — de geldende poulestand-deadline: `app_settings.group_predictions_deadline_at` (instelbaar via Admin → Overzicht → "📊 Poulestand-deadline"), fallback = deadline allereerste groepswedstrijd. Gebruikt door de RLS-policies, de save-RPC en (als waarde) de UI.
 - `generate_match_activity(p_match_id)` — RPC voor activity feed (kan ontbreken in sommige omgevingen, daarom altijd in try/catch)
 
 ## Auth flow (subtiel!)
@@ -97,6 +98,7 @@ Status: alle bekende migraties zitten in `/supabase/migrations/` en zijn (volgen
 - `add_onboarded_at.sql` — profiles.onboarded_at
 - `fix_leaderboard_view.sql` — leaderboard view zonder Cartesisch product
 - `lock_group_predictions.sql` — poulestand op slot bij toernooistart (RLS + RPC met deadline-check); gedraaid 11 juni 2026
+- `add_poulestand_deadline.sql` — app_settings tabel + instelbare poulestand-deadline (`group_predictions_deadline()` functie, key `group_predictions_deadline_at`); gedraaid 11 juni 2026
 - (impliciet) `profiles.password_set boolean DEFAULT false`
 - (impliciet) `profiles.display_preference TEXT DEFAULT 'normal'`
 
