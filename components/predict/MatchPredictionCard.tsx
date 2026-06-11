@@ -257,6 +257,12 @@ export default function MatchPredictionCard({
               )}
             </>
           )}
+          {breakdown.all_correct_bonus > 0 && (
+            <div className="flex justify-between items-center px-3 py-2 bg-[#eaf4ef]">
+              <span className="text-xs font-bold text-[#1a5c38]">🌟 Alles goed voorspeld — bonus!</span>
+              <span className="text-xs font-extrabold text-[#1a5c38]">+{breakdown.all_correct_bonus}</span>
+            </div>
+          )}
           {/* Totaal — witte achtergrond, vetgedrukt voor leesbaarheid */}
           <div className="flex justify-between items-center px-3 py-3 bg-white border-t border-[#f6f4ef]">
             <span className="text-sm font-bold text-gray-900">Totaal deze wedstrijd</span>

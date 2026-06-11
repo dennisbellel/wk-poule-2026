@@ -257,6 +257,9 @@ export default async function MatchDetailPage({ params }: PageProps) {
                     {breakdown.red_home + breakdown.red_away > 0 && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#eaf4ef] text-[#1a5c38] font-semibold">🟥 +{breakdown.red_home + breakdown.red_away}</span>
                     )}
+                    {breakdown.all_correct_bonus > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#1a5c38] text-white font-semibold">🌟 Alles goed +{breakdown.all_correct_bonus}</span>
+                    )}
                   </div>
                 )}
               </div>
