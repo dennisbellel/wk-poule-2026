@@ -5,6 +5,7 @@ import { nl } from 'date-fns/locale'
 import { sortLeaderboard } from '@/lib/points/calculate'
 import { formatDateTimeNL, isDeadlineUrgent } from '@/lib/format'
 import FeedReactions from '@/components/home/FeedReactions'
+import DeadlineList from '@/components/home/DeadlineList'
 
 export const dynamic = 'force-dynamic'
 
@@ -295,6 +296,17 @@ export default async function DashboardPage() {
   const formatDeadline = formatDateTimeNL
   const isUrgent = (date: Date) => isDeadlineUrgent(date, now)
 
+  // Compacte, serialiseerbare props voor de uitklapbare deadline-lijst
+  const deadlineListItems = deadlineItems.map(item => ({
+    id: item.id,
+    label: item.label,
+    sub: item.sub,
+    href: item.href,
+    urgent: isUrgent(item.deadline),
+    deadlineFormatted: formatDeadline(item.deadline),
+    deadlineRelative: formatDistanceToNow(item.deadline, { locale: nl, addSuffix: true }),
+  }))
+
   return (
     <div>
       {/* Punt 8: desktop header ZONDER deadline notificatie */}
@@ -344,44 +356,12 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Aankomende deadlines — prominenter per item met aparte 'Voorspel nu' knop */}
           {deadlineItems.length > 0 ? (
-            <div className="card">
+            <div className="card overflow-hidden">
               <div className="px-4 py-3 border-b border-[#f6f4ef] flex justify-between items-center">
                 <span className="text-sm font-semibold">Aankomende deadlines</span>
                 <span className="tag bg-amber-50 text-amber-700">{deadlineItems.length} open</span>
               </div>
-              {deadlineItems.map(item => {
-                const urgent = isUrgent(item.deadline)
-                return (
-                  <div
-                    key={item.id}
-                    className="px-4 py-3.5 border-b border-[#f6f4ef] last:border-0"
-                  >
-                    <div className="flex items-center gap-3 mb-2.5">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${urgent ? 'bg-red-400' : 'bg-amber-400'}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{item.label}</p>
-                        <p className="text-[11px] text-[#aaa] mt-0.5">{item.sub}</p>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          urgent ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
-                        }`}>
-                          {formatDeadline(item.deadline)}
-                        </span>
-                        <p className="text-[10px] text-[#ccc] mt-0.5">
-                          {formatDistanceToNow(item.deadline, { locale: nl, addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                    <Link
-                      href={item.href}
-                      className="block w-full text-center bg-white border border-[#c8e6d4] text-[#1a5c38] text-xs font-semibold rounded-lg py-2 hover:bg-[#eaf4ef] transition-colors"
-                    >
-                      Voorspel nu →
-                    </Link>
-                  </div>
-                )
-              })}
+              <DeadlineList items={deadlineListItems} />
             </div>
           ) : (
             <div className="card p-6 text-center text-sm text-[#aaa]">
@@ -395,30 +375,36 @@ export default async function DashboardPage() {
               <span className="text-sm font-semibold">Tussenstand</span>
               <Link href="/stand" className="text-xs font-semibold text-[#1a5c38]">Alles →</Link>
             </div>
-            {leaderboard.slice(0, 8).map(p => (
-              <div key={p.user_id}
-                className={`flex items-center gap-3 px-4 py-3 border-b border-[#f6f4ef] last:border-0 ${
-                  p.user_id === user?.id ? 'bg-[#eaf4ef]' : 'bg-white'
-                }`}>
-                <span className={`w-6 text-center ${p.rank <= 3 ? 'text-lg' : 'text-xs font-bold text-[#ccc]'}`}>
-                  {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : p.rank}
-                </span>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  p.user_id === user?.id ? 'bg-[#1a5c38]' : 'bg-[#e5e1d8]'
-                }`}>
-                  <span className={`heading text-xs font-bold ${p.user_id === user?.id ? 'text-white' : 'text-[#777]'}`}>
-                    {p.display_name[0]}
+            {(() => {
+              // Top 5 + jezelf (als je daarbuiten staat) — kort, maar je ziet altijd je eigen positie
+              const top = leaderboard.slice(0, 5)
+              const me = myEntry && myEntry.rank > 5 ? myEntry : null
+              const rows = me ? [...top, me] : top
+              return rows.map(p => (
+                <div key={p.user_id}
+                  className={`flex items-center gap-3 px-4 py-2.5 border-b border-[#f6f4ef] last:border-0 ${
+                    p.user_id === user?.id ? 'bg-[#eaf4ef]' : 'bg-white'
+                  }`}>
+                  <span className={`w-6 text-center ${p.rank <= 3 ? 'text-lg' : 'text-xs font-bold text-[#ccc]'}`}>
+                    {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : p.rank}
                   </span>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    p.user_id === user?.id ? 'bg-[#1a5c38]' : 'bg-[#e5e1d8]'
+                  }`}>
+                    <span className={`heading text-xs font-bold ${p.user_id === user?.id ? 'text-white' : 'text-[#777]'}`}>
+                      {p.display_name[0]}
+                    </span>
+                  </div>
+                  <span className={`flex-1 text-sm truncate ${p.user_id === user?.id ? 'font-semibold text-[#1a5c38]' : ''}`}>
+                    {p.display_name}{p.user_id === user?.id ? ' (jij)' : ''}
+                  </span>
+                  <span className="heading text-base font-bold">{p.total_points}</span>
                 </div>
-                <span className={`flex-1 text-sm ${p.user_id === user?.id ? 'font-semibold text-[#1a5c38]' : ''}`}>
-                  {p.display_name}{p.user_id === user?.id ? ' (jij)' : ''}
-                </span>
-                <span className="heading text-base font-bold">{p.total_points}</span>
-              </div>
-            ))}
-            {leaderboard.length > 8 && (
-              <Link href="/stand" className="block text-center py-3 text-sm font-semibold text-[#1a5c38] bg-[#f6f4ef] border-t border-[#e5e1d8]">
-                + {leaderboard.length - 8} meer deelnemers →
+              ))
+            })()}
+            {leaderboard.length > 5 && (
+              <Link href="/stand" className="block text-center py-2.5 text-xs font-semibold text-[#1a5c38] bg-[#f6f4ef] border-t border-[#e5e1d8]">
+                Volledige stand ({leaderboard.length} deelnemers) →
               </Link>
             )}
           </div>
