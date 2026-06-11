@@ -146,6 +146,7 @@ export interface LeaderboardEntry {
 
 export interface ScoringKeys {
   // Per-input wedstrijdscores
+  match_toto: number             // toto: juiste uitslag-richting (winst/gelijk/verlies)
   match_ft_team: number          // per goede team-eindstand (home of away apart)
   match_ft_exact_bonus: number   // bonus als BEIDE ft scores exact kloppen
   match_ht_team: number          // per goede team-ruststand
@@ -168,6 +169,7 @@ export interface ScoringKeys {
 }
 
 export const DEFAULT_SCORING: ScoringKeys = {
+  match_toto: 2,
   match_ft_team: 2,
   match_ft_exact_bonus: 3,
   match_ht_team: 1,
@@ -187,6 +189,7 @@ export const DEFAULT_SCORING: ScoringKeys = {
 }
 
 export const SCORING_LABELS: Record<keyof ScoringKeys, { label: string; category: string }> = {
+  match_toto: { label: 'Toto: juiste uitslag (winst/gelijk/verlies)', category: 'Wedstrijd' },
   match_ft_team: { label: 'Eindstand per team correct', category: 'Wedstrijd' },
   match_ft_exact_bonus: { label: 'Bonus: eindstand volledig exact', category: 'Wedstrijd' },
   match_ht_team: { label: 'Ruststand per team correct', category: 'Wedstrijd' },

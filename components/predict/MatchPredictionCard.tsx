@@ -220,6 +220,13 @@ export default function MatchPredictionCard({
             homeVal={v.home_ft ?? null} awayVal={v.away_ft ?? null}
             showResult pts={breakdown.ft_home + breakdown.ft_away + breakdown.ft_exact_bonus}
           />
+          {v.home_ft != null && v.away_ft != null && (
+            <PredRow
+              label="Toto"
+              homeVal={v.home_ft > v.away_ft ? 'Thuiswinst' : v.home_ft < v.away_ft ? 'Uitwinst' : 'Gelijkspel'}
+              single showResult pts={breakdown.toto}
+            />
+          )}
           <PredRow
             label={breakdown.ht_exact_bonus > 0 ? 'Ruststand (exact!)' : 'Ruststand'}
             homeVal={v.home_ht ?? null} awayVal={v.away_ht ?? null}

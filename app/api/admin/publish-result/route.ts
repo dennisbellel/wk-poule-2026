@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { calculateMatchPoints, calculateGroupStandingPoints, computeActualStandings, sortLeaderboard } from '@/lib/points/calculate'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
-import type { ScoringKeys, Match, MatchPrediction, GroupStandingPrediction, LeaderboardEntry } from '@/types'
+import { DEFAULT_SCORING, type ScoringKeys, type Match, type MatchPrediction, type GroupStandingPrediction, type LeaderboardEntry } from '@/types'
 
 interface PublishBody {
   match_id: string
@@ -94,11 +94,13 @@ export async function POST(request: Request) {
     published_at: new Date().toISOString(),
   }, { onConflict: 'match_id' })
 
-  // Scoring config laden
+  // Scoring config laden — bovenop de defaults, zodat een key die (nog) niet
+  // in de database staat nooit tot NaN-punten leidt
   const { data: scoringRows } = await admin.from('scoring_config').select('*')
-  const scoring = Object.fromEntries(
-    (scoringRows || []).map(r => [r.key, r.value])
-  ) as unknown as ScoringKeys
+  const scoring = { ...DEFAULT_SCORING } as ScoringKeys
+  for (const r of scoringRows || []) {
+    if (r.key in scoring) (scoring as unknown as Record<string, number>)[r.key] = r.value
+  }
 
   // Herbereken punten voor alle voorspellingen op deze wedstrijd
   const { data: predictions } = await admin
