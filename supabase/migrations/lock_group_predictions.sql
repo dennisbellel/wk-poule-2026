@@ -1,11 +1,11 @@
 -- ─── POULESTAND OP SLOT ──────────────────────────────────────────────────────
 -- Probleem: group_standing_predictions had géén deadline-regels. Iedereen kon
 -- (1) andermans poulestand-voorspellingen lezen vóór enige deadline (afkijken),
--- (2) zijn eigen voorspelling blijven aanpassen nadat de groepsfase al bezig was.
+-- (2) zijn eigen voorspelling blijven aanpassen nadat het toernooi al bezig was.
 --
--- Definitie van "op slot": zodra de prediction_deadline van de EERSTE wedstrijd
--- in die groep verstreken is. Per groep dus — groepen die later beginnen,
--- blijven langer open.
+-- Definitie van "op slot": zodra de prediction_deadline van de ALLEREERSTE
+-- groepswedstrijd van het toernooi verstreken is, gaan ALLE poules tegelijk
+-- dicht (keuze van de beheerder — één duidelijk slotmoment).
 --
 -- Draai dit één keer in de Supabase SQL Editor.
 
@@ -16,26 +16,24 @@ DROP POLICY IF EXISTS "Read own or locked group predictions" ON group_standing_p
 DROP POLICY IF EXISTS "Manage own group predictions before lock" ON group_standing_predictions;
 DROP POLICY IF EXISTS "Admins full access to group predictions" ON group_standing_predictions;
 
--- Eigen rijen altijd lezen; andermans pas zodra de groep op slot zit
+-- Eigen rijen altijd lezen; andermans pas zodra het toernooi begonnen is
 CREATE POLICY "Read own or locked group predictions" ON group_standing_predictions
   FOR SELECT USING (
     auth.uid() = user_id
     OR EXISTS (
       SELECT 1 FROM matches m
-      WHERE m.group_id = group_standing_predictions.group_id
-        AND m.phase = 'group'
+      WHERE m.phase = 'group'
         AND m.prediction_deadline_at <= NOW()
     )
   );
 
--- Schrijven: alleen eigen rijen, en alleen zolang de groep niet op slot zit
+-- Schrijven: alleen eigen rijen, en alleen zolang het toernooi nog niet begonnen is
 CREATE POLICY "Manage own group predictions before lock" ON group_standing_predictions
   FOR ALL USING (
     auth.uid() = user_id
     AND NOT EXISTS (
       SELECT 1 FROM matches m
-      WHERE m.group_id = group_standing_predictions.group_id
-        AND m.phase = 'group'
+      WHERE m.phase = 'group'
         AND m.prediction_deadline_at <= NOW()
     )
   );
@@ -63,11 +61,10 @@ BEGIN
 
   IF auth.uid() IS NOT NULL AND EXISTS (
     SELECT 1 FROM matches m
-    WHERE m.group_id = p_group_id
-      AND m.phase = 'group'
+    WHERE m.phase = 'group'
       AND m.prediction_deadline_at <= NOW()
   ) THEN
-    RAISE EXCEPTION 'Groep % zit op slot — de eerste wedstrijd is al begonnen', p_group_id;
+    RAISE EXCEPTION 'De poulestand zit op slot — het toernooi is al begonnen';
   END IF;
 
   -- Atomic DELETE + INSERT: voorkomt halve states bij volgorde-wissels

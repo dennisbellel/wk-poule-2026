@@ -72,11 +72,12 @@ export default function PredictClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Een groep zit op slot zodra de deadline van de eerste wedstrijd in die
-  // groep verstreken is — zelfde regel als de RLS in de database
-  function isGroupLocked(g: string): boolean {
+  // De poulestand zit op slot zodra de deadline van de allereerste
+  // groepswedstrijd van het toernooi verstreken is — alle poules tegelijk,
+  // zelfde regel als de RLS in de database
+  function isGroupLocked(): boolean {
     const now = new Date()
-    return groupMatches.some(m => m.group_id === g && new Date(m.prediction_deadline_at) <= now)
+    return groupMatches.some(m => new Date(m.prediction_deadline_at) <= now)
   }
 
   const [localMatchPreds, setLocalMatchPreds] = useState<Record<string, Partial<MatchPrediction>>>(
@@ -340,7 +341,7 @@ export default function PredictClient({
                   predictions={groupPredictions.filter(p => p.group_id === activeGroup)}
                   userId={userId}
                   adminActAs={adminActAs}
-                  locked={isGroupLocked(activeGroup) && !adminActAs}
+                  locked={isGroupLocked() && !adminActAs}
                 />
               </div>
             )}

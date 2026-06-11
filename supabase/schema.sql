@@ -159,15 +159,15 @@ CREATE TABLE group_standing_predictions (
 );
 
 ALTER TABLE group_standing_predictions ENABLE ROW LEVEL SECURITY;
--- "Op slot" = de prediction_deadline van de eerste wedstrijd in de groep is verstreken.
+-- "Op slot" = de prediction_deadline van de allereerste groepswedstrijd van het
+-- toernooi is verstreken — alle poules gaan tegelijk dicht.
 -- Eigen rijen altijd leesbaar; andermans pas na het slot (anti-afkijken).
 CREATE POLICY "Read own or locked group predictions" ON group_standing_predictions
   FOR SELECT USING (
     auth.uid() = user_id
     OR EXISTS (
       SELECT 1 FROM matches m
-      WHERE m.group_id = group_standing_predictions.group_id
-        AND m.phase = 'group'
+      WHERE m.phase = 'group'
         AND m.prediction_deadline_at <= NOW()
     )
   );
@@ -176,8 +176,7 @@ CREATE POLICY "Manage own group predictions before lock" ON group_standing_predi
     auth.uid() = user_id
     AND NOT EXISTS (
       SELECT 1 FROM matches m
-      WHERE m.group_id = group_standing_predictions.group_id
-        AND m.phase = 'group'
+      WHERE m.phase = 'group'
         AND m.prediction_deadline_at <= NOW()
     )
   );
