@@ -158,34 +158,48 @@ CREATE TABLE group_standing_predictions (
   UNIQUE(user_id, group_id, position)
 );
 
+-- App-brede instellingen (key/value). Bevat o.a. de instelbare
+-- poulestand-deadline ('group_predictions_deadline_at', ISO-timestamp).
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated can read settings" ON app_settings
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Admins can manage settings" ON app_settings
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true));
+
+-- De geldende poulestand-deadline: door de admin instelbaar via app_settings,
+-- anders de deadline van de allereerste groepswedstrijd (= start toernooi).
+CREATE OR REPLACE FUNCTION group_predictions_deadline()
+RETURNS timestamptz
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE(
+    (SELECT value::timestamptz FROM app_settings WHERE key = 'group_predictions_deadline_at'),
+    (SELECT MIN(prediction_deadline_at) FROM matches WHERE phase = 'group')
+  );
+$$;
+
 ALTER TABLE group_standing_predictions ENABLE ROW LEVEL SECURITY;
--- "Op slot" = de prediction_deadline van de allereerste groepswedstrijd van het
--- toernooi is verstreken — alle poules gaan tegelijk dicht.
--- Eigen rijen altijd leesbaar; andermans pas na het slot (anti-afkijken).
+-- Eigen rijen altijd leesbaar; andermans pas na de deadline (anti-afkijken).
 CREATE POLICY "Read own or locked group predictions" ON group_standing_predictions
   FOR SELECT USING (
-    auth.uid() = user_id
-    OR EXISTS (
-      SELECT 1 FROM matches m
-      WHERE m.phase = 'group'
-        AND m.prediction_deadline_at <= NOW()
-    )
+    auth.uid() = user_id OR NOW() >= group_predictions_deadline()
   );
 CREATE POLICY "Manage own group predictions before lock" ON group_standing_predictions
   FOR ALL USING (
-    auth.uid() = user_id
-    AND NOT EXISTS (
-      SELECT 1 FROM matches m
-      WHERE m.phase = 'group'
-        AND m.prediction_deadline_at <= NOW()
-    )
+    auth.uid() = user_id AND NOW() < group_predictions_deadline()
   );
 CREATE POLICY "Admins full access to group predictions" ON group_standing_predictions
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true));
 
 -- Atomic opslaan van een complete poulestand-voorspelling (DELETE + INSERT in één
 -- transactie), met eigenaars- en deadline-check. Volledige definitie staat in
--- /supabase/migrations/lock_group_predictions.sql
+-- /supabase/migrations/add_poulestand_deadline.sql
 
 -- ─── BONUS QUESTIONS ─────────────────────────────────────────────────────────
 CREATE TABLE bonus_questions (

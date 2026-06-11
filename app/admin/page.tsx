@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { formatDateTimeNL } from '@/lib/format'
+import GroupDeadlineCard from '@/components/admin/GroupDeadlineCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,7 @@ export default async function AdminPage() {
     { data: pendingMatches },
     { data: pendingBonusQs },
     { data: upcomingMatchesNoTeams },
+    { data: groupDeadlineRow },
   ] = await Promise.all([
     supabase.from('profiles').select('*', { count: 'exact', head: true }),
     supabase.from('matches').select('*', { count: 'exact', head: true }),
@@ -49,6 +51,11 @@ export default async function AdminPage() {
       .gte('scheduled_at', now.toISOString())
       .lte('scheduled_at', new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString())
       .or('home_team_id.is.null,away_team_id.is.null'),
+    // Instelbare poulestand-deadline (kan ontbreken zolang de migratie niet gedraaid is)
+    supabase.from('app_settings')
+      .select('value')
+      .eq('key', 'group_predictions_deadline_at')
+      .maybeSingle(),
   ])
 
   const todos: Todo[] = []
@@ -121,6 +128,9 @@ export default async function AdminPage() {
           </div>
         ))}
       </div>
+
+      {/* Poulestand-deadline instellen */}
+      <GroupDeadlineCard current={groupDeadlineRow?.value ?? null} />
 
       {/* TO-DO LIJST */}
       <div className="bg-white rounded-2xl border border-[#e5e1d8] overflow-hidden">

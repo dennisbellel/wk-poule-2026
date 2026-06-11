@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import MatchPredictionCard from './MatchPredictionCard'
 import GroupStandingForm from './GroupStandingForm'
 import BonusQuestionItem from './BonusQuestionItem'
-import { formatDateLongNL } from '@/lib/format'
+import { formatDateLongNL, formatDateTimeNL } from '@/lib/format'
 
 const GROUPS = ['A','B','C','D','E','F','G','H','I','J','K','L']
 const KO_ROUNDS = [
@@ -17,6 +17,7 @@ const KO_ROUNDS = [
 export default function PredictClient({
   userId, groupMatches, koMatches, matchPredictions, groupPredictions,
   teams, bonusQuestions, bonusAnswers, players, scoring, adminActAs,
+  groupDeadline = null,
 }: {
   userId: string
   groupMatches: Match[]
@@ -30,6 +31,9 @@ export default function PredictClient({
   scoring: ScoringKeys
   // Als gezet: admin vult namens deze user in. Saves via /api/admin/proxy-save.
   adminActAs?: { userId: string; displayName: string }
+  // Instelbare poulestand-deadline (app_settings); null = val terug op
+  // de deadline van de allereerste groepswedstrijd
+  groupDeadline?: string | null
 }) {
   const supabase = createClient()
 
@@ -72,12 +76,18 @@ export default function PredictClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // De poulestand zit op slot zodra de deadline van de allereerste
-  // groepswedstrijd van het toernooi verstreken is — alle poules tegelijk,
-  // zelfde regel als de RLS in de database
+  // De poulestand-deadline: door de admin instelbaar (app_settings), anders
+  // de deadline van de allereerste groepswedstrijd. Alle poules gaan tegelijk
+  // dicht — zelfde regel als de RLS in de database.
+  function groupLockDeadline(): Date | null {
+    if (groupDeadline) return new Date(groupDeadline)
+    const deadlines = groupMatches.map(m => new Date(m.prediction_deadline_at).getTime())
+    return deadlines.length > 0 ? new Date(Math.min(...deadlines)) : null
+  }
+
   function isGroupLocked(): boolean {
-    const now = new Date()
-    return groupMatches.some(m => new Date(m.prediction_deadline_at) <= now)
+    const d = groupLockDeadline()
+    return d !== null && d <= new Date()
   }
 
   const [localMatchPreds, setLocalMatchPreds] = useState<Record<string, Partial<MatchPrediction>>>(
@@ -311,6 +321,15 @@ export default function PredictClient({
 
             {groupTab === 1 && (
               <div>
+                {!isGroupLocked() && groupLockDeadline() && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2">
+                    <span>⏰</span>
+                    <p className="text-xs text-amber-800">
+                      Je kunt de poulestand nog invullen of aanpassen tot{' '}
+                      <span className="font-semibold">{formatDateTimeNL(groupLockDeadline()!)}</span>
+                    </p>
+                  </div>
+                )}
                 <div className="flex gap-1.5 flex-wrap mb-4">
                   {GROUPS.map(g => {
                     const groupPredCount = groupPredictions.filter(p => p.group_id === g).length

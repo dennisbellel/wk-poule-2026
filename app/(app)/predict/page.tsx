@@ -71,6 +71,13 @@ export default async function PredictPage() {
   }
   const players = allPlayers
 
+  // Instelbare poulestand-deadline (kan ontbreken zolang de migratie niet gedraaid is)
+  const { data: groupDeadlineRow } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', 'group_predictions_deadline_at')
+    .maybeSingle()
+
   // Scoring config — bepaalt punten per onderdeel in de kaart
   const { data: scoringRows } = await supabase.from('scoring_config').select('key, value')
   const scoring = { ...DEFAULT_SCORING } as ScoringKeys
@@ -90,6 +97,7 @@ export default async function PredictPage() {
       bonusAnswers={bonusAnswers || []}
       players={players || []}
       scoring={scoring}
+      groupDeadline={groupDeadlineRow?.value ?? null}
     />
   )
 }

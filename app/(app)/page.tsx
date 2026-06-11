@@ -32,6 +32,7 @@ export default async function DashboardPage() {
     { data: recentFinished },
     { data: upcomingMatches },
     { data: openBonusQuestions },
+    { data: groupDeadlineRow },
   ] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', user!.id).single(),
     supabase.from('leaderboard').select('*').order('total_points', { ascending: false }),
@@ -65,6 +66,11 @@ export default async function DashboardPage() {
       .eq('active', true)
       .gt('deadline_at', now.toISOString())
       .order('deadline_at', { ascending: true }),
+    // Instelbare poulestand-deadline (kan ontbreken zolang de migratie niet gedraaid is)
+    supabase.from('app_settings')
+      .select('value')
+      .eq('key', 'group_predictions_deadline_at')
+      .maybeSingle(),
   ])
 
   const leaderboard = sortLeaderboard(lbRaw || [])
@@ -224,7 +230,7 @@ export default async function DashboardPage() {
   const answeredBonusIds = new Set((myBonusAnswersFull || []).map(a => a.question_id))
 
   type DeadlineItem = {
-    kind: 'match' | 'bonus'
+    kind: 'match' | 'bonus' | 'group'
     id: string
     deadline: Date
     label: string
@@ -247,7 +253,20 @@ export default async function DashboardPage() {
     return `/predict?tab=tournament#bonus-${q.id}`
   }
 
+  // Poulestand: zolang de (door de admin instelbare) deadline niet verstreken
+  // is, staat hij tussen de deadlines — af = alle 12 groepen compleet
+  const groupDeadlineDate = groupDeadlineRow?.value ? new Date(groupDeadlineRow.value) : null
+
   const allDeadlineItems: DeadlineItem[] = [
+    ...(groupDeadlineDate && groupDeadlineDate > now ? [{
+      kind: 'group' as const,
+      id: 'group-standings',
+      deadline: groupDeadlineDate,
+      label: '📊 Poulestand — voorspel de eindstand van alle groepen',
+      sub: `Poulestand · ${completedGroups}/12 groepen ingevuld`,
+      done: completedGroups === 12,
+      href: '/predict?tab=group&sub=standing',
+    }] : []),
     ...(upcomingMatches || []).map(m => ({
       kind: 'match' as const,
       id: m.id,

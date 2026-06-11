@@ -121,8 +121,8 @@ export default function GroupStandingForm({
         <div className="bg-[#eaf4ef] border border-[#c8e6d4] rounded-xl px-4 py-3 flex items-start gap-2">
           <span className="flex-shrink-0">🔒</span>
           <p className="text-xs text-[#1a5c38]">
-            <span className="font-semibold">De poulestand zit op slot</span> — het toernooi
-            is begonnen. Je voorspelling telt mee zoals hij hieronder staat.
+            <span className="font-semibold">De poulestand zit op slot</span> — de deadline
+            is verstreken. Je voorspelling telt mee zoals hij hieronder staat.
           </p>
         </div>
       )}
