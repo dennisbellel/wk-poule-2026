@@ -5,6 +5,7 @@ import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import { DEFAULT_SCORING, type ScoringKeys, type Match, type MatchPrediction, type GroupStandingPrediction, type BonusQuestion, type BonusAnswer, type LeaderboardEntry } from '@/types'
 
 const NEW_SCORING_DEFAULTS: { key: keyof ScoringKeys; value: number; label_nl: string; category: string }[] = [
+  { key: 'match_toto', value: DEFAULT_SCORING.match_toto, label_nl: 'Toto: juiste uitslag (winst/gelijk/verlies)', category: 'Wedstrijd' },
   { key: 'match_ft_team', value: DEFAULT_SCORING.match_ft_team, label_nl: 'Eindstand per team correct', category: 'Wedstrijd' },
   { key: 'match_ft_exact_bonus', value: DEFAULT_SCORING.match_ft_exact_bonus, label_nl: 'Bonus: eindstand volledig exact', category: 'Wedstrijd' },
   { key: 'match_ht_team', value: DEFAULT_SCORING.match_ht_team, label_nl: 'Ruststand per team correct', category: 'Wedstrijd' },

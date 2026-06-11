@@ -242,6 +242,9 @@ export default async function MatchDetailPage({ params }: PageProps) {
                 </div>
                 {breakdown && (
                   <div className="flex flex-wrap gap-1 pl-11 mt-1.5">
+                    {breakdown.toto > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#eaf4ef] text-[#1a5c38] font-semibold">Toto +{breakdown.toto}</span>
+                    )}
                     {breakdown.ft_home + breakdown.ft_away + breakdown.ft_exact_bonus > 0 && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#eaf4ef] text-[#1a5c38] font-semibold">Eindstand +{breakdown.ft_home + breakdown.ft_away + breakdown.ft_exact_bonus}</span>
                     )}

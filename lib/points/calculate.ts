@@ -14,6 +14,7 @@ export function calculateMatchPoints(
 // ─── BREAKDOWN PER ONDERDEEL ──────────────────────────────────────────────────
 // Per-input scoring met bonus voor volledig exacte voorspelling.
 export interface MatchPointsBreakdown {
+  toto: number              // uitslag-richting correct (winst/gelijk/verlies) → match_toto
   ft_home: number           // home_ft correct → match_ft_team
   ft_away: number           // away_ft correct → match_ft_team
   ft_exact_bonus: number    // beide ft kloppen → match_ft_exact_bonus
@@ -32,6 +33,7 @@ export interface MatchPointsBreakdown {
 
 function emptyBreakdown(): MatchPointsBreakdown {
   return {
+    toto: 0,
     ft_home: 0, ft_away: 0, ft_exact_bonus: 0,
     ht_home: 0, ht_away: 0, ht_exact_bonus: 0,
     yellow_home: 0, yellow_away: 0,
@@ -47,6 +49,16 @@ export function calculateMatchPointsBreakdown(
 ): MatchPointsBreakdown {
   const b = emptyBreakdown()
   if (match.status !== 'finished') return b
+
+  // Toto: de uitslag-richting goed (thuiswinst/gelijkspel/uitwinst), los van
+  // de exacte score. Wie 3-2 voorspelt bij een 2-1 uitslag krijgt dus tóch
+  // toto-punten. Stapelt met de exacte punten — beter voorspellen loont altijd.
+  if (match.home_ft !== null && match.away_ft !== null &&
+      prediction.home_ft != null && prediction.away_ft != null) {
+    const actualSign = Math.sign(match.home_ft - match.away_ft)
+    const predictedSign = Math.sign(prediction.home_ft - prediction.away_ft)
+    if (actualSign === predictedSign) b.toto = scoring.match_toto
+  }
 
   // Eindstand per kant
   if (match.home_ft !== null && prediction.home_ft != null && prediction.home_ft === match.home_ft) {
@@ -99,7 +111,8 @@ export function calculateMatchPointsBreakdown(
     if (prediction.winner_team_id && match.winner_team_id && prediction.winner_team_id === match.winner_team_id) b.winner = scoring.knockout_winner
   }
 
-  b.total = b.ft_home + b.ft_away + b.ft_exact_bonus
+  b.total = b.toto
+          + b.ft_home + b.ft_away + b.ft_exact_bonus
           + b.ht_home + b.ht_away + b.ht_exact_bonus
           + b.yellow_home + b.yellow_away
           + b.red_home + b.red_away
