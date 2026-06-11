@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { calculateMatchPoints, calculateGroupStandingPoints, calculateBonusPoints, sortLeaderboard, type ActualGroupStanding } from '@/lib/points/calculate'
+import { calculateMatchPoints, calculateGroupStandingPoints, calculateBonusPoints, sortLeaderboard, computeActualStandings } from '@/lib/points/calculate'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import { DEFAULT_SCORING, type ScoringKeys, type Match, type MatchPrediction, type GroupStandingPrediction, type BonusQuestion, type BonusAnswer, type LeaderboardEntry } from '@/types'
 
 const NEW_SCORING_DEFAULTS: { key: keyof ScoringKeys; value: number; label_nl: string; category: string }[] = [
@@ -53,18 +54,25 @@ export async function POST() {
     if (row.key in scoring) (scoring as unknown as Record<string, number>)[row.key] = row.value
   }
 
-  // 3) Herbereken alle match_predictions
-  const { data: matches } = await admin.from('matches').select('*').eq('status', 'finished')
-  const { data: matchPreds } = await admin.from('match_predictions').select('*')
+  // 3) Herbereken alle match_predictions.
+  // Voorspellingen gebatcht ophalen — boven de 1000 rijen kapt PostgREST anders
+  // stilletjes af en zou een deel van de deelnemers verkeerde punten houden.
+  const { data: allMatches } = await admin.from('matches').select('*')
+  const finishedMatches = (allMatches || []).filter((m: Match) => m.status === 'finished')
+  const matchPreds = await fetchAllRows<MatchPrediction>((from, to) =>
+    admin.from('match_predictions').select('*').order('id').range(from, to)
+  )
 
   let matchUpdated = 0
-  if (matches && matchPreds) {
-    const matchById = new Map(matches.map((m: Match) => [m.id, m]))
-    const updates = matchPreds.map((pred: MatchPrediction) => {
-      const match = matchById.get(pred.match_id)
-      const points = match ? calculateMatchPoints(match, pred, scoring) : 0
-      return { id: pred.id, points }
-    })
+  const matchById = new Map(finishedMatches.map((m: Match) => [m.id, m]))
+  {
+    const updates = matchPreds
+      .map((pred) => {
+        const match = matchById.get(pred.match_id)
+        const points = match ? calculateMatchPoints(match, pred, scoring) : 0
+        return { id: pred.id, points, changed: points !== (pred.points ?? 0) }
+      })
+      .filter(u => u.changed)
     await Promise.all(
       updates.map(u =>
         admin.from('match_predictions').update({ points: u.points }).eq('id', u.id)
@@ -75,17 +83,21 @@ export async function POST() {
 
   // 4) Herbereken bonus_answers
   const { data: bonusQs } = await admin.from('bonus_questions').select('*')
-  const { data: bonusAns } = await admin.from('bonus_answers').select('*')
+  const bonusAns = await fetchAllRows<BonusAnswer>((from, to) =>
+    admin.from('bonus_answers').select('*').order('id').range(from, to)
+  )
   let bonusUpdated = 0
-  if (bonusQs && bonusAns) {
-    const qById = new Map(bonusQs.map((q: BonusQuestion) => [q.id, q]))
-    const updates = bonusAns.map((ans: BonusAnswer) => {
-      const q = qById.get(ans.question_id)
-      const points = q?.correct_answer
-        ? calculateBonusPoints(ans.answer, q.correct_answer, q.points_value || scoring.bonus_default)
-        : 0
-      return { id: ans.id, points }
-    })
+  {
+    const qById = new Map((bonusQs || []).map((q: BonusQuestion) => [q.id, q]))
+    const updates = bonusAns
+      .map((ans) => {
+        const q = qById.get(ans.question_id)
+        const points = q?.correct_answer
+          ? calculateBonusPoints(ans.answer, q.correct_answer, q.points_value || scoring.bonus_default)
+          : 0
+        return { id: ans.id, points, changed: points !== (ans.points ?? 0) }
+      })
+      .filter(u => u.changed)
     await Promise.all(
       updates.map(u =>
         admin.from('bonus_answers').update({ points: u.points }).eq('id', u.id)
@@ -94,27 +106,43 @@ export async function POST() {
     bonusUpdated = updates.length
   }
 
-  // 5) Herbereken group_standing_predictions op basis van werkelijke poulestand
-  // Werkelijke poulestand wordt bepaald door alle gespeelde groepswedstrijden te aggregeren.
+  // 5) Herbereken group_standing_predictions op basis van de werkelijke poulestand.
+  // Punten tellen pas zodra een groep COMPLEET gespeeld is — een halve stand
+  // zou tussentijds posities belonen die aan het eind weer kunnen omdraaien.
   let groupUpdated = 0
-  const groupMatches = (matches || []).filter((m: Match) => m.phase === 'group')
-  if (groupMatches.length > 0) {
-    const standings = computeActualStandings(groupMatches)
-    const { data: groupPreds } = await admin.from('group_standing_predictions').select('*')
-    if (groupPreds) {
-      const updates = groupPreds.map((pred: GroupStandingPrediction) => {
+  const groupTotals = new Map<string, { total: number; finished: number }>()
+  for (const m of allMatches || []) {
+    if (m.phase !== 'group' || !m.group_id) continue
+    const t = groupTotals.get(m.group_id) || { total: 0, finished: 0 }
+    t.total++
+    if (m.status === 'finished') t.finished++
+    groupTotals.set(m.group_id, t)
+  }
+  const completeGroups = new Set(
+    [...groupTotals.entries()].filter(([, t]) => t.total > 0 && t.finished === t.total).map(([g]) => g)
+  )
+
+  const standings = computeActualStandings(
+    finishedMatches.filter((m: Match) => m.phase === 'group' && m.group_id && completeGroups.has(m.group_id))
+  )
+  const groupPreds = await fetchAllRows<GroupStandingPrediction>((from, to) =>
+    admin.from('group_standing_predictions').select('*').order('id').range(from, to)
+  )
+  {
+    const updates = groupPreds
+      .map((pred) => {
         const groupStandings = standings.get(pred.group_id) || []
         const teamStanding = groupStandings.find(s => s.team_id === pred.team_id)
         const points = calculateGroupStandingPoints(pred, teamStanding, scoring)
-        return { id: pred.id, points }
+        return { id: pred.id, points, changed: points !== (pred.points ?? 0) }
       })
-      await Promise.all(
-        updates.map(u =>
-          admin.from('group_standing_predictions').update({ points: u.points }).eq('id', u.id)
-        )
+      .filter(u => u.changed)
+    await Promise.all(
+      updates.map(u =>
+        admin.from('group_standing_predictions').update({ points: u.points }).eq('id', u.id)
       )
-      groupUpdated = updates.length
-    }
+    )
+    groupUpdated = updates.length
   }
 
   // Snapshot na recalculate naar rank_history
@@ -132,55 +160,4 @@ export async function POST() {
     bonus_answers_updated: bonusUpdated,
     group_predictions_updated: groupUpdated,
   })
-}
-
-// Bepaal werkelijke poulestand uit gespeelde wedstrijden
-function computeActualStandings(matches: Match[]): Map<string, ActualGroupStanding[]> {
-  const byGroup = new Map<string, Map<string, ActualGroupStanding>>()
-
-  for (const m of matches) {
-    if (!m.group_id || m.home_ft === null || m.away_ft === null) continue
-    if (!m.home_team_id || !m.away_team_id) continue
-
-    if (!byGroup.has(m.group_id)) byGroup.set(m.group_id, new Map())
-    const g = byGroup.get(m.group_id)!
-
-    const ensure = (teamId: string): ActualGroupStanding => {
-      if (!g.has(teamId)) {
-        g.set(teamId, { team_id: teamId, position: 0, points: 0, goals_for: 0, goals_against: 0, yellow_cards: 0, red_cards: 0 })
-      }
-      return g.get(teamId)!
-    }
-
-    const home = ensure(m.home_team_id)
-    const away = ensure(m.away_team_id)
-
-    home.goals_for += m.home_ft
-    home.goals_against += m.away_ft
-    away.goals_for += m.away_ft
-    away.goals_against += m.home_ft
-    home.yellow_cards += m.home_yellow ?? 0
-    away.yellow_cards += m.away_yellow ?? 0
-    home.red_cards += m.home_red ?? 0
-    away.red_cards += m.away_red ?? 0
-
-    if (m.home_ft > m.away_ft) home.points += 3
-    else if (m.away_ft > m.home_ft) away.points += 3
-    else { home.points += 1; away.points += 1 }
-  }
-
-  // Sorteer per groep en wijs posities toe
-  const result = new Map<string, ActualGroupStanding[]>()
-  for (const [groupId, teams] of byGroup) {
-    const sorted = [...teams.values()].sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points
-      const aDiff = a.goals_for - a.goals_against
-      const bDiff = b.goals_for - b.goals_against
-      if (bDiff !== aDiff) return bDiff - aDiff
-      return b.goals_for - a.goals_for
-    })
-    sorted.forEach((s, i) => { s.position = i + 1 })
-    result.set(groupId, sorted)
-  }
-  return result
 }

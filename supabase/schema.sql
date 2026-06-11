@@ -159,9 +159,34 @@ CREATE TABLE group_standing_predictions (
 );
 
 ALTER TABLE group_standing_predictions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can read all group predictions" ON group_standing_predictions FOR SELECT USING (true);
-CREATE POLICY "Users can manage own group predictions" ON group_standing_predictions
-  FOR ALL USING (auth.uid() = user_id);
+-- "Op slot" = de prediction_deadline van de eerste wedstrijd in de groep is verstreken.
+-- Eigen rijen altijd leesbaar; andermans pas na het slot (anti-afkijken).
+CREATE POLICY "Read own or locked group predictions" ON group_standing_predictions
+  FOR SELECT USING (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM matches m
+      WHERE m.group_id = group_standing_predictions.group_id
+        AND m.phase = 'group'
+        AND m.prediction_deadline_at <= NOW()
+    )
+  );
+CREATE POLICY "Manage own group predictions before lock" ON group_standing_predictions
+  FOR ALL USING (
+    auth.uid() = user_id
+    AND NOT EXISTS (
+      SELECT 1 FROM matches m
+      WHERE m.group_id = group_standing_predictions.group_id
+        AND m.phase = 'group'
+        AND m.prediction_deadline_at <= NOW()
+    )
+  );
+CREATE POLICY "Admins full access to group predictions" ON group_standing_predictions
+  USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true));
+
+-- Atomic opslaan van een complete poulestand-voorspelling (DELETE + INSERT in één
+-- transactie), met eigenaars- en deadline-check. Volledige definitie staat in
+-- /supabase/migrations/lock_group_predictions.sql
 
 -- ─── BONUS QUESTIONS ─────────────────────────────────────────────────────────
 CREATE TABLE bonus_questions (

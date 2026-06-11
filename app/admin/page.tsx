@@ -94,7 +94,17 @@ export default async function AdminPage() {
 
   return (
     <div className="max-w-4xl space-y-6">
-      <h1 className="heading text-2xl font-extrabold text-gray-900">Overzicht</h1>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="heading text-2xl font-extrabold text-gray-900">Overzicht</h1>
+        <a
+          href="/api/admin/export"
+          download
+          title="Download alle data (deelnemers, voorspellingen, uitslagen) als backup-bestand"
+          className="bg-white border border-[#c8e6d4] text-[#1a5c38] text-sm font-semibold rounded-lg px-4 py-2 hover:bg-[#eaf4ef] transition-colors"
+        >
+          💾 Backup downloaden
+        </a>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

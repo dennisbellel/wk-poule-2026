@@ -14,13 +14,15 @@ const STATS = [
 type StatKey = typeof STATS[number]['key']
 
 export default function GroupStandingForm({
-  groupId, teams, predictions, userId, adminActAs,
+  groupId, teams, predictions, userId, adminActAs, locked = false,
 }: {
   groupId: string
   teams: Team[]
   predictions: GroupStandingPrediction[]
   userId: string
   adminActAs?: { userId: string; displayName: string }
+  // Groep op slot (eerste wedstrijd begonnen): alles read-only
+  locked?: boolean
 }) {
   const supabase = createClient()
 
@@ -115,11 +117,21 @@ export default function GroupStandingForm({
 
   return (
     <div className="max-w-xl space-y-3">
+      {locked && (
+        <div className="bg-[#eaf4ef] border border-[#c8e6d4] rounded-xl px-4 py-3 flex items-start gap-2">
+          <span className="flex-shrink-0">🔒</span>
+          <p className="text-xs text-[#1a5c38]">
+            <span className="font-semibold">Groep {groupId} zit op slot</span> — de eerste wedstrijd
+            is begonnen. Je voorspelling telt mee zoals hij hieronder staat.
+          </p>
+        </div>
+      )}
+
       {/* Ranking */}
       <div className="card overflow-hidden">
         <div className="px-4 py-2.5 bg-[#1a5c38] flex justify-between items-center">
           <span className="heading text-sm font-bold text-white">Groep {groupId}</span>
-          <span className="text-xs text-white/60">↑↓ sorteren</span>
+          <span className="text-xs text-white/60">{locked ? '🔒 vergrendeld' : '↑↓ sorteren'}</span>
         </div>
         {order.map((teamId, i) => {
           const team = teams.find(t => t.id === teamId)
@@ -132,15 +144,17 @@ export default function GroupStandingForm({
               </div>
               <span className="flex-1 text-sm font-medium">{team.flag} {team.name_nl}</span>
               {i < 2 && <span className="tag bg-[#1a5c38] text-white text-[9px]">door</span>}
-              <div className="flex gap-1">
-                {([-1, 1] as const).map(dir => (
-                  <button key={dir} onClick={() => move(i, dir)}
-                    disabled={(dir === -1 && i === 0) || (dir === 1 && i === order.length - 1)}
-                    className="w-6 h-6 rounded-md border border-[#e5e1d8] bg-[#f6f4ef] text-xs disabled:opacity-20 cursor-pointer">
-                    {dir === -1 ? '↑' : '↓'}
-                  </button>
-                ))}
-              </div>
+              {!locked && (
+                <div className="flex gap-1">
+                  {([-1, 1] as const).map(dir => (
+                    <button key={dir} onClick={() => move(i, dir)}
+                      disabled={(dir === -1 && i === 0) || (dir === 1 && i === order.length - 1)}
+                      className="w-6 h-6 rounded-md border border-[#e5e1d8] bg-[#f6f4ef] text-xs disabled:opacity-20 cursor-pointer">
+                      {dir === -1 ? '↑' : '↓'}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
@@ -165,8 +179,9 @@ export default function GroupStandingForm({
                   key={s.key}
                   type="number" min="0" max={s.max}
                   value={stats[teamId]?.[s.key] ?? 0}
+                  disabled={locked}
                   onChange={e => setStat(teamId, s.key, parseInt(e.target.value) || 0)}
-                  className="input-score text-sm font-bold flex-1 min-w-[44px] h-11"
+                  className="input-score text-sm font-bold flex-1 min-w-[44px] h-11 disabled:opacity-60"
                 />
               ))}
             </div>
@@ -174,10 +189,12 @@ export default function GroupStandingForm({
         })}
       </div>
 
-      <button onClick={handleSave} disabled={saving}
-        className={`btn-primary w-full py-3 text-sm disabled:opacity-50 ${saved ? 'bg-green-600' : ''}`}>
-        {saving ? 'Opslaan...' : saved ? `✓ Groep ${groupId} opgeslagen` : `Groep ${groupId} opslaan`}
-      </button>
+      {!locked && (
+        <button onClick={handleSave} disabled={saving}
+          className={`btn-primary w-full py-3 text-sm disabled:opacity-50 ${saved ? 'bg-green-600' : ''}`}>
+          {saving ? 'Opslaan...' : saved ? `✓ Groep ${groupId} opgeslagen` : `Groep ${groupId} opslaan`}
+        </button>
+      )}
 
       {saveError && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-2">

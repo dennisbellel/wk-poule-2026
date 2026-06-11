@@ -1,42 +1,56 @@
 import { createClient } from '@/lib/supabase/server'
 import { sortLeaderboard } from '@/lib/points/calculate'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 import StandClient from '@/components/stand/StandClient'
 
 export const dynamic = 'force-dynamic'
+
+type PredRow = { user_id: string; match_id: string } & Record<string, string | number | null>
+type AnsRow = { user_id: string; question_id: string; answer: string | null }
 
 export default async function StandPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: lbRaw } = await supabase.from('leaderboard').select('*')
-  const leaderboard = sortLeaderboard(lbRaw || [])
+  const [
+    { data: lbRaw },
+    { data: profiles },
+    { data: finishedMatches },
+    { data: bonusQs },
+  ] = await Promise.all([
+    supabase.from('leaderboard').select('*'),
+    supabase.from('profiles').select('id, previous_rank'),
+    supabase.from('matches')
+      .select('id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
+      .eq('status', 'finished'),
+    supabase.from('bonus_questions')
+      .select('id, correct_answer')
+      .not('correct_answer', 'is', null),
+  ])
 
-  // Vorige rangen ophalen om delta te berekenen
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, previous_rank')
+  // Voorspellingen gebatcht ophalen — anders kapt PostgREST stilletjes af op
+  // 1000 rijen en kloppen de percentages niet meer
+  const [allMatchPreds, allBonusAns] = await Promise.all([
+    fetchAllRows<PredRow>((from, to) =>
+      supabase.from('match_predictions')
+        .select('user_id, match_id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
+        .order('id').range(from, to)
+    ),
+    fetchAllRows<AnsRow>((from, to) =>
+      supabase.from('bonus_answers')
+        .select('user_id, question_id, answer')
+        .order('id').range(from, to)
+    ),
+  ])
+
+  const leaderboard = sortLeaderboard(lbRaw || [])
 
   const prevRankByUser = new Map<string, number | null>()
   for (const p of profiles || []) prevRankByUser.set(p.id, (p as { previous_rank?: number | null }).previous_rank ?? null)
 
-  // Percentage goede antwoorden per gebruiker
-  const { data: finishedMatches } = await supabase
-    .from('matches')
-    .select('id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
-    .eq('status', 'finished')
-
-  const { data: allMatchPreds } = await supabase
-    .from('match_predictions')
-    .select('user_id, match_id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
-
-  const { data: bonusQs } = await supabase
-    .from('bonus_questions')
-    .select('id, correct_answer')
-    .not('correct_answer', 'is', null)
-
-  const { data: allBonusAns } = await supabase
-    .from('bonus_answers')
-    .select('user_id, question_id, answer')
+  // Snelle lookups op user+match / user+vraag in plaats van zoeken per veld
+  const predByUserMatch = new Map(allMatchPreds.map(p => [`${p.user_id}|${p.match_id}`, p]))
+  const ansByUserQ = new Map(allBonusAns.map(a => [`${a.user_id}|${a.question_id}`, a]))
 
   // Per gebruiker: aantal correcte inputs en totaal mogelijke inputs (zelfde definitie als home)
   const correctByUser = new Map<string, { correct: number; total: number }>()
@@ -55,7 +69,7 @@ export default async function StandPage() {
       for (const lbEntry of leaderboard) {
         const stats = correctByUser.get(lbEntry.user_id)!
         stats.total++
-        const userPred = (allMatchPreds || []).find(p => p.user_id === lbEntry.user_id && p.match_id === m.id)
+        const userPred = predByUserMatch.get(`${lbEntry.user_id}|${m.id}`)
         if (userPred && (userPred as Record<string, number | null>)[f] === actual) stats.correct++
       }
     }
@@ -66,7 +80,7 @@ export default async function StandPage() {
     for (const lbEntry of leaderboard) {
       const stats = correctByUser.get(lbEntry.user_id)!
       stats.total++
-      const userAns = (allBonusAns || []).find(a => a.user_id === lbEntry.user_id && a.question_id === q.id)
+      const userAns = ansByUserQ.get(`${lbEntry.user_id}|${q.id}`)
       if (userAns?.answer?.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()) stats.correct++
     }
   }

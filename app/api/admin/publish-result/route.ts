@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { calculateMatchPoints, sortLeaderboard } from '@/lib/points/calculate'
-import type { ScoringKeys, Match, MatchPrediction, LeaderboardEntry } from '@/types'
+import { calculateMatchPoints, calculateGroupStandingPoints, computeActualStandings, sortLeaderboard } from '@/lib/points/calculate'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
+import type { ScoringKeys, Match, MatchPrediction, GroupStandingPrediction, LeaderboardEntry } from '@/types'
 
 interface PublishBody {
   match_id: string
@@ -120,6 +121,40 @@ export async function POST(request: Request) {
     recalculated = updates.length
   }
 
+  // Poulestand-punten automatisch bijwerken zodra deze groep compleet gespeeld
+  // is — de admin hoeft dan niet meer aan "herbereken alles" te denken.
+  // Punten tellen pas bij een complete groep; een halve stand zou tussentijds
+  // posities belonen die aan het eind weer kunnen omdraaien.
+  let groupRecalculated = 0
+  if (fullMatch.phase === 'group' && fullMatch.group_id) {
+    const { data: groupMatchRows } = await admin
+      .from('matches').select('*')
+      .eq('phase', 'group').eq('group_id', fullMatch.group_id)
+    const groupComplete = (groupMatchRows || []).length > 0 &&
+      (groupMatchRows || []).every((m: Match) => m.status === 'finished')
+
+    if (groupComplete) {
+      const standings = computeActualStandings(groupMatchRows as Match[]).get(fullMatch.group_id) || []
+      const groupPreds = await fetchAllRows<GroupStandingPrediction>((from, to) =>
+        admin.from('group_standing_predictions').select('*')
+          .eq('group_id', fullMatch.group_id).order('id').range(from, to)
+      )
+      const updates = groupPreds
+        .map(pred => ({
+          id: pred.id,
+          points: calculateGroupStandingPoints(pred, standings.find(s => s.team_id === pred.team_id), scoring),
+          prev: pred.points ?? 0,
+        }))
+        .filter(u => u.points !== u.prev)
+      await Promise.all(
+        updates.map(u =>
+          admin.from('group_standing_predictions').update({ points: u.points }).eq('id', u.id)
+        )
+      )
+      groupRecalculated = updates.length
+    }
+  }
+
   // Activity feed entry — best effort, niet blocking
   try {
     await admin.rpc('generate_match_activity', { p_match_id: body.match_id })
@@ -139,5 +174,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, recalculated })
+  return NextResponse.json({ ok: true, recalculated, group_recalculated: groupRecalculated })
 }

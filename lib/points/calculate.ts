@@ -181,6 +181,59 @@ export function calculateBonusPoints(
     : 0
 }
 
+// ─── WERKELIJKE POULESTAND ────────────────────────────────────────────────────
+// Aggregeert gespeelde groepswedstrijden tot een werkelijke stand per groep.
+// Gedeeld door /api/admin/recalculate-all en /api/admin/publish-result.
+export function computeActualStandings(matches: Match[]): Map<string, ActualGroupStanding[]> {
+  const byGroup = new Map<string, Map<string, ActualGroupStanding>>()
+
+  for (const m of matches) {
+    if (!m.group_id || m.home_ft === null || m.away_ft === null) continue
+    if (!m.home_team_id || !m.away_team_id) continue
+
+    if (!byGroup.has(m.group_id)) byGroup.set(m.group_id, new Map())
+    const g = byGroup.get(m.group_id)!
+
+    const ensure = (teamId: string): ActualGroupStanding => {
+      if (!g.has(teamId)) {
+        g.set(teamId, { team_id: teamId, position: 0, points: 0, goals_for: 0, goals_against: 0, yellow_cards: 0, red_cards: 0 })
+      }
+      return g.get(teamId)!
+    }
+
+    const home = ensure(m.home_team_id)
+    const away = ensure(m.away_team_id)
+
+    home.goals_for += m.home_ft
+    home.goals_against += m.away_ft
+    away.goals_for += m.away_ft
+    away.goals_against += m.home_ft
+    home.yellow_cards += m.home_yellow ?? 0
+    away.yellow_cards += m.away_yellow ?? 0
+    home.red_cards += m.home_red ?? 0
+    away.red_cards += m.away_red ?? 0
+
+    if (m.home_ft > m.away_ft) home.points += 3
+    else if (m.away_ft > m.home_ft) away.points += 3
+    else { home.points += 1; away.points += 1 }
+  }
+
+  // Sorteer per groep (punten → doelsaldo → doelpunten voor) en wijs posities toe
+  const result = new Map<string, ActualGroupStanding[]>()
+  for (const [groupId, teams] of byGroup) {
+    const sorted = [...teams.values()].sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      const aDiff = a.goals_for - a.goals_against
+      const bDiff = b.goals_for - b.goals_against
+      if (bDiff !== aDiff) return bDiff - aDiff
+      return b.goals_for - a.goals_for
+    })
+    sorted.forEach((s, i) => { s.position = i + 1 })
+    result.set(groupId, sorted)
+  }
+  return result
+}
+
 // ─── LEADERBOARD SORT ─────────────────────────────────────────────────────────
 // 1e parameter: totaal punten (desc)
 // 2e parameter tiebreaker: aantal goede voorspellingen (desc)

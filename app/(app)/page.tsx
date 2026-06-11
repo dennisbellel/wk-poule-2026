@@ -12,57 +12,71 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: profile } = await supabase
-    .from('profiles').select('*').eq('id', user!.id).single()
+  const now = new Date()
+  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
-  const { data: lbRaw } = await supabase
-    .from('leaderboard').select('*').order('total_points', { ascending: false })
+  // Alle onafhankelijke queries tegelijk — dit is het drukst bezochte scherm,
+  // queries één voor één stellen maakte de pagina onnodig traag
+  const [
+    { data: profile },
+    { data: lbRaw },
+    { count: predCount },
+    { count: totalGroupMatches },
+    { data: myGroupPreds },
+    { count: bonusCount },
+    { count: totalBonus },
+    { data: finishedForStats },
+    { data: myPredictions },
+    { data: publishedBonusQs },
+    { data: myBonusAnswersFull },
+    { data: recentFinished },
+    { data: upcomingMatches },
+    { data: openBonusQuestions },
+  ] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user!.id).single(),
+    supabase.from('leaderboard').select('*').order('total_points', { ascending: false }),
+    supabase.from('match_predictions').select('*', { count: 'exact', head: true }).eq('user_id', user!.id),
+    supabase.from('matches').select('*', { count: 'exact', head: true }).eq('phase', 'group'),
+    supabase.from('group_standing_predictions').select('group_id').eq('user_id', user!.id),
+    supabase.from('bonus_answers').select('*', { count: 'exact', head: true }).eq('user_id', user!.id),
+    supabase.from('bonus_questions').select('*', { count: 'exact', head: true }).eq('active', true),
+    supabase.from('matches')
+      .select('id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
+      .eq('status', 'finished'),
+    supabase.from('match_predictions')
+      .select('match_id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
+      .eq('user_id', user!.id),
+    supabase.from('bonus_questions').select('id, correct_answer').not('correct_answer', 'is', null),
+    supabase.from('bonus_answers').select('question_id, answer').eq('user_id', user!.id),
+    supabase.from('matches')
+      .select('id, scheduled_at, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red, home_team:home_team_id(name_nl, flag), away_team:away_team_id(name_nl, flag)')
+      .eq('status', 'finished')
+      .order('scheduled_at', { ascending: false })
+      .limit(5),
+    supabase.from('matches')
+      .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
+      .eq('status', 'scheduled')
+      .gt('prediction_deadline_at', now.toISOString())
+      .lte('prediction_deadline_at', in7Days.toISOString())
+      .order('prediction_deadline_at', { ascending: true })
+      .limit(10),
+    supabase.from('bonus_questions')
+      .select('*')
+      .eq('active', true)
+      .gt('deadline_at', now.toISOString())
+      .order('deadline_at', { ascending: true }),
+  ])
 
   const leaderboard = sortLeaderboard(lbRaw || [])
   const myEntry = leaderboard.find(e => e.user_id === user!.id)
 
-
-  const { count: predCount } = await supabase
-    .from('match_predictions')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', user!.id)
-
-  const { count: totalGroupMatches } = await supabase
-    .from('matches')
-    .select('*', { count: 'exact', head: true })
-    .eq('phase', 'group')
-
   // Aantal volledig voorspelde groepen (alle 4 teams ingevuld)
-  const { data: myGroupPreds } = await supabase
-    .from('group_standing_predictions')
-    .select('group_id')
-    .eq('user_id', user!.id)
   const groupCounts = new Map<string, number>()
   for (const p of myGroupPreds || []) groupCounts.set(p.group_id, (groupCounts.get(p.group_id) || 0) + 1)
   const completedGroups = Array.from(groupCounts.values()).filter(n => n === 4).length
 
-  const { count: bonusCount } = await supabase
-    .from('bonus_answers')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', user!.id)
-
-  const { count: totalBonus } = await supabase
-    .from('bonus_questions')
-    .select('*', { count: 'exact', head: true })
-    .eq('active', true)
-
   // Percentage goed: tel mijn correcte inputs / totaal mogelijke inputs voor alle gespeelde wedstrijden.
   // "Mogelijke inputs" = aantal velden in gespeelde wedstrijden waar een uitslag bekend is (max 8 per match).
-  const { data: finishedForStats } = await supabase
-    .from('matches')
-    .select('id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
-    .eq('status', 'finished')
-
-  const { data: myPredictions } = await supabase
-    .from('match_predictions')
-    .select('match_id, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red')
-    .eq('user_id', user!.id)
-
   const myPredsByMatch = new Map<string, typeof myPredictions extends (infer U)[] | null ? U : never>()
   for (const p of myPredictions || []) myPredsByMatch.set(p.match_id, p)
 
@@ -85,16 +99,6 @@ export default async function DashboardPage() {
   }
 
   // Bonusvragen: ook meetellen als "had goed kunnen zijn" zodra correct_answer gezet is
-  const { data: publishedBonusQs } = await supabase
-    .from('bonus_questions')
-    .select('id, correct_answer')
-    .not('correct_answer', 'is', null)
-
-  const { data: myBonusAnswersFull } = await supabase
-    .from('bonus_answers')
-    .select('question_id, answer')
-    .eq('user_id', user!.id)
-
   const myBonusByQ = new Map((myBonusAnswersFull || []).map(a => [a.question_id, a.answer]))
   for (const q of publishedBonusQs || []) {
     if (!q.correct_answer) continue
@@ -130,19 +134,7 @@ export default async function DashboardPage() {
     }
   }
 
-  // Reactions voor feed-items
-  const { data: reactionsData } = await supabase
-    .from('match_reactions')
-    .select('id, user_id, match_id, emoji')
-
   // Bijzondere scores feed: per recent gepubliceerde wedstrijd één statement
-  const { data: recentFinished } = await supabase
-    .from('matches')
-    .select('id, scheduled_at, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red, home_team:home_team_id(name_nl, flag), away_team:away_team_id(name_nl, flag)')
-    .eq('status', 'finished')
-    .order('scheduled_at', { ascending: false })
-    .limit(5)
-
   type FeedItem = {
     matchId: string
     homeFlag: string; homeName: string
@@ -153,13 +145,22 @@ export default async function DashboardPage() {
     sub: string | null
   }
   const feedItems: FeedItem[] = []
+  // Reactions alleen voor de 5 getoonde wedstrijden — niet de hele tabel
+  let reactionsData: { id: string; user_id: string; match_id: string; emoji: string }[] = []
 
   if (recentFinished && recentFinished.length > 0) {
     const matchIds = recentFinished.map(m => m.id)
-    const { data: predsForRecent } = await supabase
-      .from('match_predictions')
-      .select('match_id, user_id, points, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red, profile:user_id(display_name)')
-      .in('match_id', matchIds)
+    const [{ data: predsForRecent }, { data: reactionRows }] = await Promise.all([
+      supabase
+        .from('match_predictions')
+        .select('match_id, user_id, points, home_ft, away_ft, home_ht, away_ht, home_yellow, away_yellow, home_red, away_red, profile:user_id(display_name)')
+        .in('match_id', matchIds),
+      supabase
+        .from('match_reactions')
+        .select('id, user_id, match_id, emoji')
+        .in('match_id', matchIds),
+    ])
+    reactionsData = reactionRows || []
 
     for (const m of recentFinished) {
       const homeTeam = Array.isArray(m.home_team) ? m.home_team[0] : m.home_team
@@ -219,38 +220,8 @@ export default async function DashboardPage() {
   }
 
 
-  const now = new Date()
-  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-
-  const { data: upcomingMatches } = await supabase
-    .from('matches')
-    .select('*, home_team:home_team_id(*), away_team:away_team_id(*)')
-    .eq('status', 'scheduled')
-    .gt('prediction_deadline_at', now.toISOString())
-    .lte('prediction_deadline_at', in7Days.toISOString())
-    .order('prediction_deadline_at', { ascending: true })
-    .limit(10)
-
-  const { data: myMatchPreds } = await supabase
-    .from('match_predictions')
-    .select('match_id')
-    .eq('user_id', user!.id)
-
-  const predictedMatchIds = new Set((myMatchPreds || []).map((p: { match_id: string }) => p.match_id))
-
-  const { data: openBonusQuestions } = await supabase
-    .from('bonus_questions')
-    .select('*')
-    .eq('active', true)
-    .gt('deadline_at', now.toISOString())
-    .order('deadline_at', { ascending: true })
-
-  const { data: myBonusAnswers } = await supabase
-    .from('bonus_answers')
-    .select('question_id')
-    .eq('user_id', user!.id)
-
-  const answeredBonusIds = new Set((myBonusAnswers || []).map((a: { question_id: string }) => a.question_id))
+  const predictedMatchIds = new Set((myPredictions || []).map(p => p.match_id))
+  const answeredBonusIds = new Set((myBonusAnswersFull || []).map(a => a.question_id))
 
   type DeadlineItem = {
     kind: 'match' | 'bonus'

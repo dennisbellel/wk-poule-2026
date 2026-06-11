@@ -1,40 +1,66 @@
 import { createClient } from '@/lib/supabase/server'
 import StatsClient from '@/components/stats/StatsClient'
 import { sortLeaderboard } from '@/lib/points/calculate'
+import { fetchAllRows } from '@/lib/supabase/fetchAll'
 
 export const dynamic = 'force-dynamic'
+
+type PredRow = {
+  user_id: string
+  match_id: string
+  home_ft: number | null
+  away_ft: number | null
+  points: number | null
+}
 
 export default async function StatsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: lbRaw } = await supabase.from('leaderboard').select('*')
+  const [
+    { data: lbRaw },
+    { data: myRankHistory },
+    { data: finishedMatches },
+    { data: profilesWithPrev },
+  ] = await Promise.all([
+    supabase.from('leaderboard').select('*'),
+    // 1) Lijngrafiek: rank_history voor de huidige gebruiker
+    supabase.from('rank_history')
+      .select('rank, snapshotted_at')
+      .eq('user_id', user!.id)
+      .order('snapshotted_at', { ascending: true }),
+    supabase.from('matches')
+      .select('id, home_ft, away_ft')
+      .eq('status', 'finished'),
+    supabase.from('profiles').select('id, previous_rank'),
+  ])
+
   const leaderboard = sortLeaderboard(lbRaw || [])
 
-  // 1) Lijngrafiek: rank_history voor de huidige gebruiker
-  const { data: myRankHistory } = await supabase
-    .from('rank_history')
-    .select('rank, snapshotted_at')
-    .eq('user_id', user!.id)
-    .order('snapshotted_at', { ascending: true })
+  // Eén gebatchte fetch (ipv twee aparte) — boven de 1000 rijen kapt PostgREST
+  // anders stilletjes af en kloppen trefzekerheid en topscoorders niet meer
+  const allMatchPreds = await fetchAllRows<PredRow>((from, to) =>
+    supabase.from('match_predictions')
+      .select('user_id, match_id, home_ft, away_ft, points')
+      .order('id').range(from, to)
+  )
+
+  const predByUserMatch = new Map(allMatchPreds.map(p => [`${p.user_id}|${p.match_id}`, p]))
+  const predsByMatch = new Map<string, PredRow[]>()
+  for (const p of allMatchPreds) {
+    const list = predsByMatch.get(p.match_id)
+    if (list) list.push(p)
+    else predsByMatch.set(p.match_id, [p])
+  }
 
   // 2) Trefzekerheid (% exact eindstand goed) per gebruiker
-  const { data: finishedMatches } = await supabase
-    .from('matches')
-    .select('id, home_ft, away_ft')
-    .eq('status', 'finished')
-
-  const { data: allMatchPreds } = await supabase
-    .from('match_predictions')
-    .select('user_id, match_id, home_ft, away_ft')
-
   const exactByUser = new Map<string, { exact: number; predicted: number }>()
   for (const e of leaderboard) exactByUser.set(e.user_id, { exact: 0, predicted: 0 })
 
   for (const m of finishedMatches || []) {
     if (m.home_ft === null || m.away_ft === null) continue
     for (const e of leaderboard) {
-      const userPred = (allMatchPreds || []).find(p => p.user_id === e.user_id && p.match_id === m.id)
+      const userPred = predByUserMatch.get(`${e.user_id}|${m.id}`)
       if (!userPred || userPred.home_ft === null || userPred.away_ft === null) continue
       const stats = exactByUser.get(e.user_id)!
       stats.predicted++
@@ -57,20 +83,14 @@ export default async function StatsPage() {
   })
 
   // 3) Topscoorder per wedstrijd: per finished match wie de hoogste mp.points had
-  const { data: matchPredsWithPoints } = await supabase
-    .from('match_predictions')
-    .select('user_id, match_id, points')
-
-  const topScorerByMatch = new Map<string, string>() // match_id → user_id
-  if (finishedMatches && matchPredsWithPoints) {
-    for (const m of finishedMatches) {
-      const preds = matchPredsWithPoints.filter(p => p.match_id === m.id && (p.points ?? 0) > 0)
-      if (preds.length === 0) continue
-      const maxPts = Math.max(...preds.map(p => p.points ?? 0))
-      const winners = preds.filter(p => p.points === maxPts)
-      // Bij gelijkspel iedereen tellen
-      for (const w of winners) topScorerByMatch.set(`${m.id}-${w.user_id}`, w.user_id)
-    }
+  const topScorerByMatch = new Map<string, string>() // `match-user` → user_id
+  for (const m of finishedMatches || []) {
+    const preds = (predsByMatch.get(m.id) || []).filter(p => (p.points ?? 0) > 0)
+    if (preds.length === 0) continue
+    const maxPts = Math.max(...preds.map(p => p.points ?? 0))
+    const winners = preds.filter(p => p.points === maxPts)
+    // Bij gelijkspel iedereen tellen
+    for (const w of winners) topScorerByMatch.set(`${m.id}-${w.user_id}`, w.user_id)
   }
   const topScorerCount = new Map<string, number>()
   for (const [, uid] of topScorerByMatch) {
@@ -83,13 +103,9 @@ export default async function StatsPage() {
   })).sort((a, b) => b.count - a.count).slice(0, 8)
 
   // 4) Klimmer: grootste rank-stijging tov previous_rank
-  const { data: profilesWithPrev } = await supabase
-    .from('profiles')
-    .select('id, previous_rank')
-
+  const prevById = new Map((profilesWithPrev || []).map(p => [p.id, (p as { previous_rank?: number | null }).previous_rank ?? null]))
   const movers = leaderboard.map(e => {
-    const prof = (profilesWithPrev || []).find(p => p.id === e.user_id) as { id: string; previous_rank?: number | null } | undefined
-    const prev = prof?.previous_rank ?? null
+    const prev = prevById.get(e.user_id) ?? null
     const delta = prev != null ? prev - e.rank : null
     return { user_id: e.user_id, display_name: e.display_name, rank: e.rank, delta }
   })
