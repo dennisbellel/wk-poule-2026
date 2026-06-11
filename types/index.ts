@@ -145,14 +145,19 @@ export interface LeaderboardEntry {
 }
 
 export interface ScoringKeys {
-  // Per-input wedstrijdscores
+  // Per-input wedstrijdscores — elk onderdeel apart instelbaar
   match_toto: number             // toto: juiste uitslag-richting (winst/gelijk/verlies)
-  match_ft_team: number          // per goede team-eindstand (home of away apart)
+  match_ft_home: number          // doelpunten thuisteam (eindstand) correct
+  match_ft_away: number          // doelpunten uitteam (eindstand) correct
+  match_ht_home: number          // doelpunten thuisteam (ruststand) correct
+  match_ht_away: number          // doelpunten uitteam (ruststand) correct
+  match_yellow_home: number      // gele kaarten thuisteam correct
+  match_yellow_away: number      // gele kaarten uitteam correct
+  match_red_home: number         // rode kaarten thuisteam correct
+  match_red_away: number         // rode kaarten uitteam correct
   match_ft_exact_bonus: number   // bonus als BEIDE ft scores exact kloppen
-  match_ht_team: number          // per goede team-ruststand
   match_ht_exact_bonus: number   // bonus als BEIDE ht scores exact kloppen
-  match_yellow_team: number      // per goede team gele kaarten
-  match_red_team: number         // per goede team rode kaarten
+  match_all_correct_bonus: number // bonus als ALLE 8 inputs kloppen
   // Knockout extra
   knockout_et: number
   knockout_pens: number
@@ -168,14 +173,20 @@ export interface ScoringKeys {
   bonus_default: number
 }
 
+// Bij alles goed: 5 + 8×3 + 5 + 3 + 3 = 40 punten
 export const DEFAULT_SCORING: ScoringKeys = {
-  match_toto: 2,
-  match_ft_team: 2,
-  match_ft_exact_bonus: 3,
-  match_ht_team: 1,
-  match_ht_exact_bonus: 1,
-  match_yellow_team: 1,
-  match_red_team: 2,
+  match_toto: 5,
+  match_ft_home: 3,
+  match_ft_away: 3,
+  match_ht_home: 3,
+  match_ht_away: 3,
+  match_yellow_home: 3,
+  match_yellow_away: 3,
+  match_red_home: 3,
+  match_red_away: 3,
+  match_ft_exact_bonus: 5,
+  match_ht_exact_bonus: 3,
+  match_all_correct_bonus: 3,
   knockout_et: 2,
   knockout_pens: 2,
   knockout_winner: 3,
@@ -189,13 +200,18 @@ export const DEFAULT_SCORING: ScoringKeys = {
 }
 
 export const SCORING_LABELS: Record<keyof ScoringKeys, { label: string; category: string }> = {
-  match_toto: { label: 'Toto: juiste uitslag (winst/gelijk/verlies)', category: 'Wedstrijd' },
-  match_ft_team: { label: 'Eindstand per team correct', category: 'Wedstrijd' },
-  match_ft_exact_bonus: { label: 'Bonus: eindstand volledig exact', category: 'Wedstrijd' },
-  match_ht_team: { label: 'Ruststand per team correct', category: 'Wedstrijd' },
-  match_ht_exact_bonus: { label: 'Bonus: ruststand volledig exact', category: 'Wedstrijd' },
-  match_yellow_team: { label: 'Gele kaarten per team correct', category: 'Wedstrijd' },
-  match_red_team: { label: 'Rode kaarten per team correct', category: 'Wedstrijd' },
+  match_toto: { label: 'Toto: winnaar of gelijkspel goed', category: 'Wedstrijd' },
+  match_ft_home: { label: 'Doelpunten thuisteam (eindstand)', category: 'Wedstrijd' },
+  match_ft_away: { label: 'Doelpunten uitteam (eindstand)', category: 'Wedstrijd' },
+  match_ht_home: { label: 'Doelpunten thuisteam (ruststand)', category: 'Wedstrijd' },
+  match_ht_away: { label: 'Doelpunten uitteam (ruststand)', category: 'Wedstrijd' },
+  match_yellow_home: { label: 'Gele kaarten thuisteam', category: 'Wedstrijd' },
+  match_yellow_away: { label: 'Gele kaarten uitteam', category: 'Wedstrijd' },
+  match_red_home: { label: 'Rode kaarten thuisteam', category: 'Wedstrijd' },
+  match_red_away: { label: 'Rode kaarten uitteam', category: 'Wedstrijd' },
+  match_ft_exact_bonus: { label: 'Bonus: eindstand helemaal goed', category: 'Wedstrijd' },
+  match_ht_exact_bonus: { label: 'Bonus: ruststand helemaal goed', category: 'Wedstrijd' },
+  match_all_correct_bonus: { label: 'Bonus: alles goed voorspeld', category: 'Wedstrijd' },
   knockout_et: { label: 'Verlenging (ja/nee) correct', category: 'Knockout extra' },
   knockout_pens: { label: 'Strafschoppen (ja/nee) correct', category: 'Knockout extra' },
   knockout_winner: { label: 'Winnaar correct', category: 'Knockout extra' },

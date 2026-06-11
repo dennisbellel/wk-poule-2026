@@ -15,8 +15,8 @@ export function calculateMatchPoints(
 // Per-input scoring met bonus voor volledig exacte voorspelling.
 export interface MatchPointsBreakdown {
   toto: number              // uitslag-richting correct (winst/gelijk/verlies) → match_toto
-  ft_home: number           // home_ft correct → match_ft_team
-  ft_away: number           // away_ft correct → match_ft_team
+  ft_home: number           // home_ft correct → match_ft_home
+  ft_away: number           // away_ft correct → match_ft_away
   ft_exact_bonus: number    // beide ft kloppen → match_ft_exact_bonus
   ht_home: number
   ht_away: number
@@ -25,6 +25,7 @@ export interface MatchPointsBreakdown {
   yellow_away: number
   red_home: number
   red_away: number
+  all_correct_bonus: number // alle 8 inputs kloppen → match_all_correct_bonus
   et: number
   pens: number
   winner: number
@@ -38,6 +39,7 @@ function emptyBreakdown(): MatchPointsBreakdown {
     ht_home: 0, ht_away: 0, ht_exact_bonus: 0,
     yellow_home: 0, yellow_away: 0,
     red_home: 0, red_away: 0,
+    all_correct_bonus: 0,
     et: 0, pens: 0, winner: 0, total: 0,
   }
 }
@@ -50,6 +52,16 @@ export function calculateMatchPointsBreakdown(
   const b = emptyBreakdown()
   if (match.status !== 'finished') return b
 
+  // Correctheid per input (alleen waar als de uitslag bekend én voorspeld is)
+  const ftHomeOk = match.home_ft !== null && prediction.home_ft != null && prediction.home_ft === match.home_ft
+  const ftAwayOk = match.away_ft !== null && prediction.away_ft != null && prediction.away_ft === match.away_ft
+  const htHomeOk = match.home_ht !== null && prediction.home_ht != null && prediction.home_ht === match.home_ht
+  const htAwayOk = match.away_ht !== null && prediction.away_ht != null && prediction.away_ht === match.away_ht
+  const yellowHomeOk = match.home_yellow !== null && prediction.home_yellow != null && prediction.home_yellow === match.home_yellow
+  const yellowAwayOk = match.away_yellow !== null && prediction.away_yellow != null && prediction.away_yellow === match.away_yellow
+  const redHomeOk = match.home_red !== null && prediction.home_red != null && prediction.home_red === match.home_red
+  const redAwayOk = match.away_red !== null && prediction.away_red != null && prediction.away_red === match.away_red
+
   // Toto: de uitslag-richting goed (thuiswinst/gelijkspel/uitwinst), los van
   // de exacte score. Wie 3-2 voorspelt bij een 2-1 uitslag krijgt dus tóch
   // toto-punten. Stapelt met de exacte punten — beter voorspellen loont altijd.
@@ -60,47 +72,22 @@ export function calculateMatchPointsBreakdown(
     if (actualSign === predictedSign) b.toto = scoring.match_toto
   }
 
-  // Eindstand per kant
-  if (match.home_ft !== null && prediction.home_ft != null && prediction.home_ft === match.home_ft) {
-    b.ft_home = scoring.match_ft_team
-  }
-  if (match.away_ft !== null && prediction.away_ft != null && prediction.away_ft === match.away_ft) {
-    b.ft_away = scoring.match_ft_team
-  }
-  // Bonus: beide ft volledig exact
-  if (match.home_ft !== null && match.away_ft !== null &&
-      prediction.home_ft != null && prediction.away_ft != null &&
-      prediction.home_ft === match.home_ft && prediction.away_ft === match.away_ft) {
-    b.ft_exact_bonus = scoring.match_ft_exact_bonus
-  }
+  // Doelpunten en kaarten per kant — elk z'n eigen instelbare punten
+  if (ftHomeOk) b.ft_home = scoring.match_ft_home
+  if (ftAwayOk) b.ft_away = scoring.match_ft_away
+  if (htHomeOk) b.ht_home = scoring.match_ht_home
+  if (htAwayOk) b.ht_away = scoring.match_ht_away
+  if (yellowHomeOk) b.yellow_home = scoring.match_yellow_home
+  if (yellowAwayOk) b.yellow_away = scoring.match_yellow_away
+  if (redHomeOk) b.red_home = scoring.match_red_home
+  if (redAwayOk) b.red_away = scoring.match_red_away
 
-  // Ruststand per kant
-  if (match.home_ht !== null && prediction.home_ht != null && prediction.home_ht === match.home_ht) {
-    b.ht_home = scoring.match_ht_team
-  }
-  if (match.away_ht !== null && prediction.away_ht != null && prediction.away_ht === match.away_ht) {
-    b.ht_away = scoring.match_ht_team
-  }
-  if (match.home_ht !== null && match.away_ht !== null &&
-      prediction.home_ht != null && prediction.away_ht != null &&
-      prediction.home_ht === match.home_ht && prediction.away_ht === match.away_ht) {
-    b.ht_exact_bonus = scoring.match_ht_exact_bonus
-  }
-
-  // Gele kaarten per kant
-  if (match.home_yellow !== null && prediction.home_yellow != null && prediction.home_yellow === match.home_yellow) {
-    b.yellow_home = scoring.match_yellow_team
-  }
-  if (match.away_yellow !== null && prediction.away_yellow != null && prediction.away_yellow === match.away_yellow) {
-    b.yellow_away = scoring.match_yellow_team
-  }
-
-  // Rode kaarten per kant
-  if (match.home_red !== null && prediction.home_red != null && prediction.home_red === match.home_red) {
-    b.red_home = scoring.match_red_team
-  }
-  if (match.away_red !== null && prediction.away_red != null && prediction.away_red === match.away_red) {
-    b.red_away = scoring.match_red_team
+  // Bonussen: eindstand helemaal goed, ruststand helemaal goed, alles goed
+  if (ftHomeOk && ftAwayOk) b.ft_exact_bonus = scoring.match_ft_exact_bonus
+  if (htHomeOk && htAwayOk) b.ht_exact_bonus = scoring.match_ht_exact_bonus
+  if (ftHomeOk && ftAwayOk && htHomeOk && htAwayOk &&
+      yellowHomeOk && yellowAwayOk && redHomeOk && redAwayOk) {
+    b.all_correct_bonus = scoring.match_all_correct_bonus
   }
 
   // Knockout extras
@@ -116,6 +103,7 @@ export function calculateMatchPointsBreakdown(
           + b.ht_home + b.ht_away + b.ht_exact_bonus
           + b.yellow_home + b.yellow_away
           + b.red_home + b.red_away
+          + b.all_correct_bonus
           + b.et + b.pens + b.winner
   return b
 }

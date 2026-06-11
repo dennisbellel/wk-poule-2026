@@ -2,20 +2,21 @@ import { NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { calculateMatchPoints, calculateGroupStandingPoints, calculateBonusPoints, sortLeaderboard, computeActualStandings } from '@/lib/points/calculate'
 import { fetchAllRows } from '@/lib/supabase/fetchAll'
-import { DEFAULT_SCORING, type ScoringKeys, type Match, type MatchPrediction, type GroupStandingPrediction, type BonusQuestion, type BonusAnswer, type LeaderboardEntry } from '@/types'
+import { DEFAULT_SCORING, SCORING_LABELS, type ScoringKeys, type Match, type MatchPrediction, type GroupStandingPrediction, type BonusQuestion, type BonusAnswer, type LeaderboardEntry } from '@/types'
 
-const NEW_SCORING_DEFAULTS: { key: keyof ScoringKeys; value: number; label_nl: string; category: string }[] = [
-  { key: 'match_toto', value: DEFAULT_SCORING.match_toto, label_nl: 'Toto: juiste uitslag (winst/gelijk/verlies)', category: 'Wedstrijd' },
-  { key: 'match_ft_team', value: DEFAULT_SCORING.match_ft_team, label_nl: 'Eindstand per team correct', category: 'Wedstrijd' },
-  { key: 'match_ft_exact_bonus', value: DEFAULT_SCORING.match_ft_exact_bonus, label_nl: 'Bonus: eindstand volledig exact', category: 'Wedstrijd' },
-  { key: 'match_ht_team', value: DEFAULT_SCORING.match_ht_team, label_nl: 'Ruststand per team correct', category: 'Wedstrijd' },
-  { key: 'match_ht_exact_bonus', value: DEFAULT_SCORING.match_ht_exact_bonus, label_nl: 'Bonus: ruststand volledig exact', category: 'Wedstrijd' },
-  { key: 'match_yellow_team', value: DEFAULT_SCORING.match_yellow_team, label_nl: 'Gele kaarten per team correct', category: 'Wedstrijd' },
-  { key: 'match_red_team', value: DEFAULT_SCORING.match_red_team, label_nl: 'Rode kaarten per team correct', category: 'Wedstrijd' },
-]
+// Alle bekende scoring-keys met hun default — automatisch in sync met types
+const NEW_SCORING_DEFAULTS = (Object.keys(SCORING_LABELS) as (keyof ScoringKeys)[]).map(k => ({
+  key: k,
+  value: DEFAULT_SCORING[k],
+  label_nl: SCORING_LABELS[k].label,
+  category: SCORING_LABELS[k].category,
+}))
 
 // Oude keys die vervangen zijn — worden verwijderd zodat ze niet meer optellen of verwarring geven
-const OLD_KEYS_TO_REMOVE = ['exact_ft', 'correct_outcome', 'exact_ht', 'exact_yellow', 'exact_red']
+const OLD_KEYS_TO_REMOVE = [
+  'exact_ft', 'correct_outcome', 'exact_ht', 'exact_yellow', 'exact_red',
+  'match_ft_team', 'match_ht_team', 'match_yellow_team', 'match_red_team',
+]
 
 export async function POST() {
   const supabase = await createClient()
