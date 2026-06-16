@@ -311,6 +311,7 @@ export default function PredictClient({
                           onSave={data => saveMatchPrediction(m.id, data)}
                           isGroup
                           scoring={scoring}
+                          adminEdit={!!adminActAs}
                         />
                       ))}
                     </div>
@@ -520,6 +521,7 @@ export default function PredictClient({
                   onSave={data => saveMatchPrediction(m.id, data)}
                   isGroup={false}
                   scoring={scoring}
+                  adminEdit={!!adminActAs}
                 />
               ))
             )}

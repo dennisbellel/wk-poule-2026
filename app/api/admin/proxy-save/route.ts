@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { calculateMatchPoints } from '@/lib/points/calculate'
+import { DEFAULT_SCORING, type ScoringKeys, type Match, type MatchPrediction } from '@/types'
 
 // Admin slaat voorspellingen op namens een andere deelnemer.
 // Drie types: 'match' (wedstrijd), 'bonus' (vraag), 'group' (poulestand).
@@ -26,11 +28,30 @@ export async function POST(request: Request) {
   if (body.type === 'match') {
     const { match_id, ...fields } = body.payload as { match_id: string }
     if (!match_id) return NextResponse.json({ error: 'match_id verplicht' }, { status: 400 })
+
+    // Is de wedstrijd al gespeeld? Dan moeten we na het opslaan de punten van
+    // déze voorspelling direct herberekenen, zodat de tussenstand meteen klopt.
+    const { data: dbMatch } = await admin
+      .from('matches').select('*').eq('id', match_id).single()
+
+    let points: number | undefined
+    if (dbMatch?.status === 'finished') {
+      const { data: scoringRows } = await admin.from('scoring_config').select('key, value')
+      const scoring = { ...DEFAULT_SCORING } as ScoringKeys
+      for (const r of scoringRows || []) {
+        if (r.key in scoring) (scoring as unknown as Record<string, number>)[r.key] = r.value
+      }
+      points = calculateMatchPoints(dbMatch as Match, { ...(fields as Partial<MatchPrediction>) } as MatchPrediction, scoring)
+    }
+
     const { error } = await admin
       .from('match_predictions')
-      .upsert({ user_id: body.user_id, match_id, ...fields }, { onConflict: 'user_id,match_id' })
+      .upsert(
+        { user_id: body.user_id, match_id, ...fields, ...(points !== undefined ? { points } : {}) },
+        { onConflict: 'user_id,match_id' }
+      )
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, points: points ?? null })
   }
 
   if (body.type === 'bonus') {
