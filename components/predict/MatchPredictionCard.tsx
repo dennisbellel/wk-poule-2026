@@ -68,13 +68,16 @@ function PredRow({ label, icon, homeVal, awayVal, pts, showResult, single }: {
 }
 
 export default function MatchPredictionCard({
-  match, prediction, onSave, isGroup, scoring,
+  match, prediction, onSave, isGroup, scoring, adminEdit = false,
 }: {
   match: Match
   prediction: Partial<MatchPrediction> | undefined
   onSave: (data: Partial<MatchPrediction>) => Promise<void>
   isGroup: boolean
   scoring: ScoringKeys
+  // Admin bewerkt namens iemand: dan mag je ook vergrendelde/gespeelde
+  // wedstrijden aanpassen (de score herberekent direct bij opslaan)
+  adminEdit?: boolean
 }) {
   const [v, setV] = useState<Partial<MatchPrediction>>(prediction || {})
   const [saving, setSaving] = useState(false)
@@ -210,10 +213,12 @@ export default function MatchPredictionCard({
       )}
 
       {/* Voorspelling sectie */}
-      {isFinished && hasExisting && (
+      {isFinished && (hasExisting || adminEdit) && (
         <div>
           <div className="px-3 pt-2.5 pb-0 text-center">
-            <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wide">Jouw voorspelling</p>
+            <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wide">
+              {adminEdit ? 'Voorspelling & punten (live)' : 'Jouw voorspelling'}
+            </p>
           </div>
           <PredRow
             label={breakdown.ft_exact_bonus > 0 ? 'Eindstand (exact!)' : 'Eindstand'}
@@ -272,14 +277,14 @@ export default function MatchPredictionCard({
       )}
 
       {/* Vergrendeld of gespeeld zonder voorspelling */}
-      {(isLocked || isFinished) && !hasExisting && (
+      {(isLocked || isFinished) && !hasExisting && !adminEdit && (
         <div className="px-3 py-4 text-center text-sm text-[#888]">
           Je had geen voorspelling ingevuld voor deze wedstrijd.
         </div>
       )}
 
       {/* Vergrendeld: toon voorspelling readonly */}
-      {isLocked && hasExisting && (
+      {isLocked && hasExisting && !adminEdit && (
         <div>
           <div className="px-3 pt-2.5 pb-0 text-center">
             <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wide">Jouw voorspelling</p>
@@ -292,8 +297,19 @@ export default function MatchPredictionCard({
         </div>
       )}
 
-      {/* Open: invulformulier — zelfde grid als breakdown zodat inputs gecentreerd zijn */}
-      {isOpen && (
+      {/* Admin-waarschuwing bij het bewerken van een al vergrendelde/gespeelde wedstrijd */}
+      {adminEdit && !isOpen && (
+        <div className="mx-3 mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-2">
+          <span className="flex-shrink-0">⚠</span>
+          <p className="text-[11px] text-amber-800">
+            Je past {isFinished ? 'een al gespeelde en beoordeelde' : 'een vergrendelde'} wedstrijd aan.
+            {isFinished && ' De punten worden direct opnieuw berekend bij opslaan.'}
+          </p>
+        </div>
+      )}
+
+      {/* Open of admin-bewerking: invulformulier */}
+      {(isOpen || adminEdit) && (
         <div className="bg-white">
           <div className="grid grid-cols-[7rem_1fr_7rem] items-center gap-2 px-3 py-2.5 border-b border-[#f6f4ef]">
             <span className="text-xs text-[#888]">Eindstand</span>
