@@ -162,14 +162,27 @@ export default function PredictClient({
     }
   }
 
-  const groupMatchesByDay = groupMatches.reduce((acc, m) => {
+  const groupByDay = (list: Match[]) => list.reduce((acc, m) => {
     const date = new Date(m.scheduled_at).toISOString().split('T')[0]
     if (!acc[date]) acc[date] = []
     acc[date].push(m)
     return acc
   }, {} as Record<string, Match[]>)
 
-  const koMatchesInRound = koMatches.filter(m => m.phase === koRound)
+  // Gespeelde wedstrijden naar onderen — de wedstrijden waarop je nog kunt
+  // voorspellen staan zo altijd bovenaan
+  const activeGroupDays = groupByDay(groupMatches.filter(m => m.status !== 'finished'))
+  const playedGroupDays = groupByDay(groupMatches.filter(m => m.status === 'finished'))
+
+  // Binnen een ronde ook: nog te spelen eerst, gespeelde onderaan
+  const koMatchesInRound = koMatches
+    .filter(m => m.phase === koRound)
+    .sort((a, b) => {
+      const af = a.status === 'finished' ? 1 : 0
+      const bf = b.status === 'finished' ? 1 : 0
+      if (af !== bf) return af - bf
+      return new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+    })
   const openKoCount = koMatches.filter(m => m.status === 'scheduled' && m.home_team_id && m.away_team_id).length
   const savedKoCount = koMatches.filter(m => localMatchPreds[m.id]?.home_ft !== undefined).length
 
@@ -297,7 +310,7 @@ export default function PredictClient({
           <div className="p-4 lg:p-8">
             {groupTab === 0 && (
               <div className="space-y-4">
-                {Object.entries(groupMatchesByDay).map(([date, matches]) => (
+                {Object.entries(activeGroupDays).map(([date, matches]) => (
                   <div key={date}>
                     <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wider mb-2">
                       {formatDateLongNL(date)}
@@ -317,6 +330,39 @@ export default function PredictClient({
                     </div>
                   </div>
                 ))}
+
+                {/* Gespeelde wedstrijden onderaan */}
+                {Object.keys(playedGroupDays).length > 0 && (
+                  <div className="pt-2">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="flex-1 h-px bg-[#e5e1d8]" />
+                      <span className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wider">Gespeeld</span>
+                      <div className="flex-1 h-px bg-[#e5e1d8]" />
+                    </div>
+                    <div className="space-y-4">
+                      {Object.entries(playedGroupDays).map(([date, matches]) => (
+                        <div key={date}>
+                          <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wider mb-2">
+                            {formatDateLongNL(date)}
+                          </p>
+                          <div className="space-y-2">
+                            {matches.map(m => (
+                              <MatchPredictionCard
+                                key={m.id}
+                                match={m}
+                                prediction={localMatchPreds[m.id]}
+                                onSave={data => saveMatchPrediction(m.id, data)}
+                                isGroup
+                                scoring={scoring}
+                                adminEdit={!!adminActAs}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
