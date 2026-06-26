@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import type { Match, MatchPrediction, GroupStandingPrediction, BonusQuestion, BonusAnswer, Team, Player, ScoringKeys } from '@/types'
+import type { ActualGroupStanding } from '@/lib/points/calculate'
 import { createClient } from '@/lib/supabase/client'
 import MatchPredictionCard from './MatchPredictionCard'
 import GroupStandingForm from './GroupStandingForm'
@@ -18,6 +19,7 @@ export default function PredictClient({
   userId, groupMatches, koMatches, matchPredictions, groupPredictions,
   teams, bonusQuestions, bonusAnswers, players, scoring, adminActAs,
   groupDeadline = null,
+  actualGroupStandings = {},
 }: {
   userId: string
   groupMatches: Match[]
@@ -34,6 +36,8 @@ export default function PredictClient({
   // Instelbare poulestand-deadline (app_settings); null = val terug op
   // de deadline van de allereerste groepswedstrijd
   groupDeadline?: string | null
+  // Echte eindstand per afgeronde groep — voor de "had ik het goed?"-feedback
+  actualGroupStandings?: Record<string, ActualGroupStanding[]>
 }) {
   const supabase = createClient()
 
@@ -408,6 +412,8 @@ export default function PredictClient({
                   userId={userId}
                   adminActAs={adminActAs}
                   locked={isGroupLocked() && !adminActAs}
+                  scoring={scoring}
+                  actualStanding={actualGroupStandings[activeGroup]}
                 />
               </div>
             )}

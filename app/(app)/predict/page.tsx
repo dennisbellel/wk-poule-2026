@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import PredictClient from '@/components/predict/PredictClient'
-import { DEFAULT_SCORING, type ScoringKeys, type Player } from '@/types'
+import { computeActualStandings, type ActualGroupStanding } from '@/lib/points/calculate'
+import { DEFAULT_SCORING, type ScoringKeys, type Player, type Match } from '@/types'
 
 export default async function PredictPage() {
   const supabase = await createClient()
@@ -85,6 +86,26 @@ export default async function PredictPage() {
     if (row.key in scoring) (scoring as unknown as Record<string, number>)[row.key] = row.value
   }
 
+  // Echte poulestand per AFGERONDE groep (alle wedstrijden gespeeld) — voor de
+  // feedback "had ik het goed?" op het poulestand-scherm. Wordt uit dezelfde
+  // wedstrijduitslagen berekend als de scoring, dus altijd consistent.
+  const gm = (groupMatches || []) as unknown as Match[]
+  const totalByGroup = new Map<string, number>()
+  const finishedByGroup = new Map<string, number>()
+  for (const m of gm) {
+    if (!m.group_id) continue
+    totalByGroup.set(m.group_id, (totalByGroup.get(m.group_id) ?? 0) + 1)
+    if (m.status === 'finished') finishedByGroup.set(m.group_id, (finishedByGroup.get(m.group_id) ?? 0) + 1)
+  }
+  const completeGroups = new Set(
+    [...totalByGroup].filter(([g, t]) => t > 0 && finishedByGroup.get(g) === t).map(([g]) => g)
+  )
+  const standingsMap = computeActualStandings(
+    gm.filter(m => m.status === 'finished' && m.group_id && completeGroups.has(m.group_id))
+  )
+  const actualGroupStandings: Record<string, ActualGroupStanding[]> = {}
+  for (const g of completeGroups) actualGroupStandings[g] = standingsMap.get(g) ?? []
+
   return (
     <PredictClient
       userId={user!.id}
@@ -98,6 +119,7 @@ export default async function PredictPage() {
       players={players || []}
       scoring={scoring}
       groupDeadline={groupDeadlineRow?.value ?? null}
+      actualGroupStandings={actualGroupStandings}
     />
   )
 }
