@@ -10,7 +10,6 @@ export default async function AdminMatchesPage() {
   const { data: matches } = await supabase
     .from('matches')
     .select('*, home_team:home_team_id(id, name), away_team:away_team_id(id, name)')
-    .eq('phase', 'group')
     .order('scheduled_at', { ascending: true })
 
   const { data: teams } = await supabase
