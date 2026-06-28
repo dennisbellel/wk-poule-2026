@@ -42,41 +42,61 @@ export default function AdminResultsPageClient({ matches }: { matches: Match[] }
       </div>
 
       {/* Uitslagen tab */}
-      {tab === 'results' && (
-        <div className="space-y-3">
-          <p className="text-xs text-gray-400 mb-4">
-            Vul alle velden in en klik Publiceer — pas dan wordt de uitslag zichtbaar voor deelnemers.
-          </p>
-          {matches.map(m => (
-            <AdminResultForm
-              key={m.id}
-              match={{
-                id: m.id,
-                scheduled_at: m.scheduled_at,
-                status: m.status,
-                group_id: m.group_id,
-                phase: m.phase,
-                home_ft: m.home_ft,
-                away_ft: m.away_ft,
-                home_ht: m.home_ht,
-                away_ht: m.away_ht,
-                home_yellow: m.home_yellow,
-                away_yellow: m.away_yellow,
-                home_red: m.home_red,
-                away_red: m.away_red,
-                penalties: m.penalties,
-                home_et: m.home_et,
-                away_et: m.away_et,
-                winner_team_id: m.winner_team_id,
-                home_team_id: m.home_team_id,
-                away_team_id: m.away_team_id,
-                home_team: m.home_team ? { name_nl: m.home_team.name_nl ?? m.home_team.name, flag: m.home_team.flag } : null,
-                away_team: m.away_team ? { name_nl: m.away_team.name_nl ?? m.away_team.name, flag: m.away_team.flag } : null,
-              }}
-            />
-          ))}
-        </div>
-      )}
+      {tab === 'results' && (() => {
+        const toFormMatch = (m: Match) => ({
+          id: m.id,
+          scheduled_at: m.scheduled_at,
+          status: m.status,
+          group_id: m.group_id,
+          phase: m.phase,
+          home_ft: m.home_ft,
+          away_ft: m.away_ft,
+          home_ht: m.home_ht,
+          away_ht: m.away_ht,
+          home_yellow: m.home_yellow,
+          away_yellow: m.away_yellow,
+          home_red: m.home_red,
+          away_red: m.away_red,
+          penalties: m.penalties,
+          home_et: m.home_et,
+          away_et: m.away_et,
+          winner_team_id: m.winner_team_id,
+          home_team_id: m.home_team_id,
+          away_team_id: m.away_team_id,
+          home_team: m.home_team ? { name_nl: m.home_team.name_nl ?? m.home_team.name, flag: m.home_team.flag } : null,
+          away_team: m.away_team ? { name_nl: m.away_team.name_nl ?? m.away_team.name, flag: m.away_team.flag } : null,
+        })
+        // Nog te publiceren bovenaan, al gepubliceerde onderaan — minder scrollen
+        const todo = matches.filter(m => m.status !== 'finished')
+        const done = matches.filter(m => m.status === 'finished')
+        return (
+          <div className="space-y-3">
+            <p className="text-xs text-gray-400 mb-4">
+              Vul alle velden in en klik Publiceer — pas dan wordt de uitslag zichtbaar voor deelnemers.
+            </p>
+            {todo.map(m => (
+              <AdminResultForm key={m.id} match={toFormMatch(m)} />
+            ))}
+
+            {done.length > 0 && (
+              <div className="pt-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex-1 h-px bg-[#e5e1d8]" />
+                  <span className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wider">
+                    Gepubliceerd ({done.length})
+                  </span>
+                  <div className="flex-1 h-px bg-[#e5e1d8]" />
+                </div>
+                <div className="space-y-3">
+                  {done.map(m => (
+                    <AdminResultForm key={m.id} match={toFormMatch(m)} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Wedstrijden tab */}
       {tab === 'matches' && (
