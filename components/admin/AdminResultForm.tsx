@@ -18,6 +18,11 @@ interface MatchWithTeams {
   home_red: number | null
   away_red: number | null
   penalties: boolean
+  home_et: number | null
+  away_et: number | null
+  winner_team_id: string | null
+  home_team_id: string | null
+  away_team_id: string | null
   home_team: { name_nl: string; flag: string } | null
   away_team: { name_nl: string; flag: string } | null
 }
@@ -49,6 +54,11 @@ export default function AdminResultForm({ match }: { match: MatchWithTeams }) {
     home_yellow: match.home_yellow, away_yellow: match.away_yellow,
     home_red: match.home_red, away_red: match.away_red,
   })
+  // Knockout-extra's
+  const isKnockout = match.phase !== 'group'
+  const [extraTime, setExtraTime] = useState<boolean>(match.home_et !== null)
+  const [penalties, setPenalties] = useState<boolean>(match.penalties ?? false)
+  const [winnerTeamId, setWinnerTeamId] = useState<string | null>(match.winner_team_id ?? null)
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -57,11 +67,13 @@ export default function AdminResultForm({ match }: { match: MatchWithTeams }) {
 
   const s = (k: keyof typeof v, val: number | null) => setV(p => ({ ...p, [k]: val }))
 
-  // Alle verplichte velden ingevuld?
-  const isComplete = v.home_ft !== null && v.away_ft !== null &&
+  // Alle verplichte velden ingevuld? Bij knockout moet ook de winnaar gekozen zijn
+  // (kan niet uit de score worden afgeleid als de eindstand gelijk is).
+  const baseComplete = v.home_ft !== null && v.away_ft !== null &&
     v.home_ht !== null && v.away_ht !== null &&
     v.home_yellow !== null && v.away_yellow !== null &&
     v.home_red !== null && v.away_red !== null
+  const isComplete = baseComplete && (!isKnockout || !!winnerTeamId)
 
   // Sla op als concept in pending_results (niet direct in matches)
   async function handleSave() {
@@ -91,10 +103,23 @@ export default function AdminResultForm({ match }: { match: MatchWithTeams }) {
     setFeedback(null)
 
     try {
+      // Knockout: eindstand = score waarmee het eindigt (na 90 of 120 min).
+      // "Verlenging ja" markeren we door home_et/away_et te vullen met diezelfde
+      // eindstand (de scoring kijkt of er een et-waarde is). Winnaar expliciet
+      // meesturen — bij gelijke eindstand kan die niet uit de score komen.
+      const knockoutFields = isKnockout
+        ? {
+            penalties,
+            home_et: extraTime ? v.home_ft : null,
+            away_et: extraTime ? v.away_ft : null,
+            winner_team_id: winnerTeamId,
+          }
+        : {}
+
       const res = await fetch('/api/admin/publish-result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ match_id: match.id, ...v }),
+        body: JSON.stringify({ match_id: match.id, ...v, ...knockoutFields }),
       })
       const json = await res.json()
 
@@ -174,6 +199,60 @@ export default function AdminResultForm({ match }: { match: MatchWithTeams }) {
           </div>
         ))}
       </div>
+
+      {/* Knockout-extra's: verlenging / strafschoppen / winnaar */}
+      {isKnockout && (
+        <div className="px-4 py-3 border-t border-[#f0ede6] bg-white space-y-3">
+          <p className="text-[11px] font-semibold text-[#aaa] uppercase tracking-wide">Knockout</p>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[#888] w-28 flex-shrink-0">Verlenging?</span>
+            <div className="flex gap-2">
+              {[['Ja', true], ['Nee', false]].map(([lbl, val]) => (
+                <button key={String(lbl)} type="button"
+                  onClick={() => setExtraTime(val as boolean)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-0 cursor-pointer transition-colors ${
+                    extraTime === val ? 'bg-[#eaf4ef] text-[#1a5c38]' : 'bg-[#f6f4ef] text-[#aaa]'
+                  }`}>{lbl}</button>
+              ))}
+            </div>
+            <span className="text-[11px] text-[#bbb]">eindstand na {extraTime ? '120' : '90'} min</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[#888] w-28 flex-shrink-0">Strafschoppen?</span>
+            <div className="flex gap-2">
+              {[['Ja', true], ['Nee', false]].map(([lbl, val]) => (
+                <button key={String(lbl)} type="button"
+                  onClick={() => setPenalties(val as boolean)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-0 cursor-pointer transition-colors ${
+                    penalties === val ? 'bg-[#eaf4ef] text-[#1a5c38]' : 'bg-[#f6f4ef] text-[#aaa]'
+                  }`}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[#888] w-28 flex-shrink-0">Wie gaat door?</span>
+            <div className="flex gap-2 flex-1">
+              {[
+                { id: match.home_team_id, label: `${match.home_team?.flag ?? ''} ${match.home_team?.name_nl ?? 'Thuis'}` },
+                { id: match.away_team_id, label: `${match.away_team?.flag ?? ''} ${match.away_team?.name_nl ?? 'Uit'}` },
+              ].map(opt => (
+                <button key={opt.id ?? opt.label} type="button"
+                  onClick={() => setWinnerTeamId(opt.id)}
+                  disabled={!opt.id}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border-0 cursor-pointer transition-colors disabled:opacity-40 ${
+                    winnerTeamId && winnerTeamId === opt.id ? 'bg-[#1a5c38] text-white' : 'bg-[#f6f4ef] text-gray-700'
+                  }`}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+          {isKnockout && !winnerTeamId && (
+            <p className="text-[11px] text-amber-600">⚠ Kies wie doorgaat — nodig om te kunnen publiceren.</p>
+          )}
+        </div>
+      )}
 
       {/* Feedback banner */}
       {feedback && (

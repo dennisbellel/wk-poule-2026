@@ -65,6 +65,11 @@ export default function AdminResultsPageClient({ matches }: { matches: Match[] }
                 home_red: m.home_red,
                 away_red: m.away_red,
                 penalties: m.penalties,
+                home_et: m.home_et,
+                away_et: m.away_et,
+                winner_team_id: m.winner_team_id,
+                home_team_id: m.home_team_id,
+                away_team_id: m.away_team_id,
                 home_team: m.home_team ? { name_nl: m.home_team.name_nl ?? m.home_team.name, flag: m.home_team.flag } : null,
                 away_team: m.away_team ? { name_nl: m.away_team.name_nl ?? m.away_team.name, flag: m.away_team.flag } : null,
               }}
