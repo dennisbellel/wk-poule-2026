@@ -23,11 +23,120 @@ interface BonusQuestion {
 interface Team {
   id: string
   name: string
+  name_nl?: string
+  flag?: string | null
+  group_id?: string | null
+}
+
+interface Player {
+  id: string
+  name: string
+  position: string | null
+  team_id: string | null
+  team_nl: string | null
 }
 
 interface Props {
   initialQuestions: BonusQuestion[]
   teams: Team[]
+  players: Player[]
+}
+
+const POSITION_LABELS: Record<string, string> = {
+  GK: 'Keeper', DEF: 'Verdediger', MID: 'Middenvelder', FWD: 'Aanvaller',
+}
+
+// Kies-selector voor het juiste antwoord bij land/speler-vragen. Levert
+// exact dezelfde waarde-notatie op als deelnemers opslaan (land = name_nl,
+// speler = "Naam (Land)"), zodat het nakijken altijd klopt. Meerdere goede
+// antwoorden mogelijk — opgeslagen als komma-gescheiden lijst.
+function AnswerSelector({
+  type, teams, players, teamFilter, value, onChange,
+}: {
+  type: 'team' | 'player'
+  teams: Team[]
+  players: Player[]
+  teamFilter: string | null
+  value: string
+  onChange: (val: string) => void
+}) {
+  const [q, setQ] = useState('')
+  const [posFilter, setPosFilter] = useState('')
+
+  const selected = value.split(',').map(s => s.trim()).filter(Boolean)
+  const toggle = (val: string) => {
+    const next = selected.includes(val) ? selected.filter(s => s !== val) : [...selected, val]
+    onChange(next.join(', '))
+  }
+
+  const teamOpts = teams
+    .filter(t => !q || (t.name_nl ?? t.name).toLowerCase().includes(q.toLowerCase()))
+    .map(t => ({ val: t.name_nl ?? t.name, label: `${t.flag ?? ''} ${t.name_nl ?? t.name}`, sub: t.group_id ? `Groep ${t.group_id}` : '' }))
+
+  const playerOpts = players
+    .filter(p => !teamFilter || p.team_id === teamFilter)
+    .filter(p => !posFilter || p.position === posFilter)
+    .filter(p => !q || p.name.toLowerCase().includes(q.toLowerCase()) || (p.team_nl ?? '').toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 60)
+    .map(p => ({
+      val: `${p.name} (${p.team_nl})`,
+      label: p.name,
+      sub: teamFilter ? (POSITION_LABELS[p.position ?? ''] || p.position || '') : `${p.team_nl} · ${POSITION_LABELS[p.position ?? ''] || p.position || ''}`,
+    }))
+
+  const opts = type === 'team' ? teamOpts : playerOpts
+
+  return (
+    <div className="max-w-md">
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {selected.map(s => (
+            <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1a5c38] text-white text-[11px] font-semibold">
+              {s}
+              <button onClick={() => toggle(s)} className="cursor-pointer border-0 bg-transparent text-white/80 hover:text-white">✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        placeholder={type === 'team' ? 'Zoek land...' : 'Zoek speler...'}
+        className="w-full bg-[#f6f4ef] border border-[#e5e1d8] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#1a5c38] mb-1.5"
+      />
+      {type === 'player' && !teamFilter && (
+        <div className="flex gap-1.5 mb-1.5 flex-wrap">
+          {(['', 'FWD', 'MID', 'DEF', 'GK'] as const).map(pos => (
+            <button key={pos} onClick={() => setPosFilter(pos)}
+              className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border-0 cursor-pointer transition-colors ${
+                posFilter === pos ? 'bg-[#eaf4ef] text-[#1a5c38]' : 'bg-[#f6f4ef] text-[#aaa]'
+              }`}>
+              {pos ? POSITION_LABELS[pos] : 'Alle'}
+            </button>
+          ))}
+        </div>
+      )}
+      {(q || type === 'team') && (
+        <div className="flex flex-col gap-1 max-h-56 overflow-y-auto border border-[#f0ede6] rounded-lg p-1">
+          {opts.map(opt => (
+            <button key={opt.val} onClick={() => toggle(opt.val)}
+              className={`flex justify-between items-center px-3 py-2 rounded-lg text-sm cursor-pointer border-0 text-left transition-colors ${
+                selected.includes(opt.val) ? 'bg-[#eaf4ef] text-[#1a5c38] font-semibold' : 'bg-white hover:bg-[#f6f4ef] text-gray-900'
+              }`}>
+              <span>{opt.label}</span>
+              <span className="text-[11px] text-[#aaa] ml-2 flex-shrink-0">{opt.sub}</span>
+            </button>
+          ))}
+          {opts.length === 0 && (
+            <p className="text-xs text-[#aaa] text-center py-2">Geen resultaten{q ? ` voor "${q}"` : ''}</p>
+          )}
+        </div>
+      )}
+      {type === 'player' && !q && (
+        <p className="text-[10px] text-gray-400 mt-1">Typ om een speler te zoeken. Meerdere goede antwoorden? Kies er gerust meer.</p>
+      )}
+    </div>
+  )
 }
 
 const TYPE_OPTIONS = [
@@ -74,7 +183,7 @@ const EMPTY_QUESTION: Partial<BonusQuestion> = {
   options: null,
 }
 
-export default function AdminBonusClient({ initialQuestions, teams }: Props) {
+export default function AdminBonusClient({ initialQuestions, teams, players }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const [questions, setQuestions] = useState<BonusQuestion[]>(initialQuestions)
@@ -352,6 +461,18 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
                           </button>
                         ))}
                       </div>
+                    ) : q.question_type === 'team' || q.question_type === 'player' ? (
+                      <div>
+                        <span className="text-xs text-gray-400 block mb-1.5">Juist antwoord (kies uit de lijst):</span>
+                        <AnswerSelector
+                          type={q.question_type}
+                          teams={teams}
+                          players={players}
+                          teamFilter={q.team_filter}
+                          value={q.correct_answer ?? ''}
+                          onChange={val => setCorrectAnswer(q, val)}
+                        />
+                      </div>
                     ) : (
                       <div>
                         <div className="flex gap-2 items-center">
@@ -360,31 +481,17 @@ export default function AdminBonusClient({ initialQuestions, teams }: Props) {
                             type={q.question_type === 'number' ? 'number' : 'text'}
                             value={q.correct_answer ?? ''}
                             onChange={e => setCorrectAnswer(q, e.target.value)}
-                            placeholder={
-                              q.question_type === 'number' ? 'bijv. 4' :
-                              q.question_type === 'team' ? 'bijv. NED' :
-                              q.question_type === 'player' ? 'bijv. Gakpo' :
-                              'antwoord...'
-                            }
+                            placeholder={q.question_type === 'number' ? 'bijv. 4' : 'antwoord...'}
                             className="flex-1 max-w-md bg-[#f6f4ef] border border-[#e5e1d8] rounded-lg px-3 py-1
                                        text-sm focus:outline-none focus:border-[#1a5c38]"
                           />
                         </div>
-                        {/* Multi-answer hint en preview — niet voor getallen */}
-                        {q.question_type !== 'number' && (
+                        {/* Multi-answer hint bij vrije tekst */}
+                        {q.question_type === 'text' && (
                           <div className="mt-1.5 pl-[88px]">
                             <p className="text-[10px] text-gray-400">
-                              💡 Meerdere antwoorden mogelijk? Scheid met komma&apos;s (bv. <em>Memphis, Gakpo, Bergwijn</em>)
+                              💡 Meerdere antwoorden mogelijk? Scheid met komma&apos;s
                             </p>
-                            {q.correct_answer && q.correct_answer.includes(',') && (
-                              <div className="flex flex-wrap gap-1 mt-1.5">
-                                {q.correct_answer.split(',').map(a => a.trim()).filter(Boolean).map((a, i) => (
-                                  <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#eaf4ef] text-[#1a5c38] text-[10px] font-semibold">
-                                    {a}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>
