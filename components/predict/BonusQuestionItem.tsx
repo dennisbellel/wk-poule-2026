@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import type { BonusQuestion, Team, Player } from '@/types'
+import { calculateBonusPoints } from '@/lib/points/calculate'
 
 const POSITION_LABELS: Record<string, string> = {
   GK: 'Keeper', DEF: 'Verdediger', MID: 'Middenvelder', FWD: 'Aanvaller'
@@ -60,6 +61,11 @@ export default function BonusQuestionItem({
   const deadlinePast = new Date(question.deadline_at) < new Date()
   const hasVal = value !== ''
 
+  // Nagekeken = deadline voorbij én juiste antwoord door de admin gepubliceerd
+  const graded = deadlinePast && !!question.correct_answer
+  const earnedPts = graded ? calculateBonusPoints(value, question.correct_answer as string, question.points_value) : 0
+  const isCorrect = graded && earnedPts > 0
+
   // Player-vragen wachten op spelersdata (bv. landenselecties bekend op 1 juni)
   const isPlayerType = question.question_type === 'player'
   const playerPool = isPlayerType
@@ -115,7 +121,13 @@ export default function BonusQuestionItem({
               : 'open'}
           </p>
         </div>
-        {hasVal && <span className="tag bg-[#1a5c38] text-white flex-shrink-0">✓ Ingevuld</span>}
+        {graded ? (
+          <span className={`tag flex-shrink-0 ${isCorrect ? 'bg-[#1a5c38] text-white' : 'bg-red-100 text-red-600'}`}>
+            {isCorrect ? `✓ Goed +${earnedPts}` : '✗ Fout'}
+          </span>
+        ) : hasVal ? (
+          <span className="tag bg-[#1a5c38] text-white flex-shrink-0">✓ Ingevuld</span>
+        ) : null}
       </div>
 
       {/* Wachten op spelersdata (alleen player-type vragen) */}
@@ -125,10 +137,29 @@ export default function BonusQuestionItem({
           <span>Wachten op definitieve selecties — beschikbaar vanaf 1 juni</span>
         </div>
 
-      /* Deadline verstreken */
+      /* Nagekeken: toon jouw antwoord, het juiste antwoord en je punten */
+      ) : graded ? (
+        <div className={`rounded-lg px-3 py-2.5 border ${isCorrect ? 'bg-[#eaf4ef] border-[#c8e6d4]' : 'bg-red-50 border-red-100'}`}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wide text-[#aaa] font-semibold">Jouw antwoord</p>
+              <p className={`text-sm font-bold truncate ${isCorrect ? 'text-[#1a5c38]' : 'text-gray-700'}`}>
+                {value || 'Niet ingevuld'}
+              </p>
+            </div>
+            <span className={`text-sm font-extrabold flex-shrink-0 ${isCorrect ? 'text-[#1a5c38]' : 'text-red-500'}`}>
+              {isCorrect ? `+${earnedPts}` : '+0'}
+            </span>
+          </div>
+          <p className="text-[11px] text-[#888] mt-1.5 pt-1.5 border-t border-black/5">
+            Juiste antwoord: <span className="font-semibold text-gray-700">{question.correct_answer}</span>
+          </p>
+        </div>
+
+      /* Deadline verstreken, maar nog niet nagekeken */
       ) : deadlinePast ? (
         <div className="bg-[#f6f4ef] rounded-lg px-3 py-2 text-sm text-[#888]">
-          {value || 'Niet ingevuld'} · <span className="text-[11px]">Deadline verstreken</span>
+          {value || 'Niet ingevuld'} · <span className="text-[11px]">Deadline verstreken · nog niet nagekeken</span>
         </div>
 
       /* ── JA / NEE ─────────────────────────────── */
