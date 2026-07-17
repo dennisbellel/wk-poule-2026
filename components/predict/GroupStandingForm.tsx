@@ -166,7 +166,9 @@ export default function GroupStandingForm({
                 className={`flex items-center gap-2 px-4 py-1.5 text-sm ${s.position <= 2 ? 'bg-[#eaf4ef]' : ''}`}>
                 <span className="w-5 text-center text-[11px] font-bold text-[#999]">{s.position}</span>
                 <span className="flex-1 truncate">{team?.flag} {team?.name_nl ?? s.team_id}</span>
-                <span className="text-[11px] text-[#888]">{s.points} pt · {s.goals_for}-{s.goals_against}</span>
+                <span className="text-[11px] text-[#888] whitespace-nowrap">
+                  {s.points} pt · {s.goals_for}-{s.goals_against} · 🟨 {s.yellow_cards} · 🟥 {s.red_cards}
+                </span>
               </div>
             )
           })}
